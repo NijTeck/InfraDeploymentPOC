@@ -42,8 +42,8 @@ steps:
           az deployment sub create \
             --name "${{ parameters.subscriptionName }}-subscription-$(Build.BuildNumber)" \
             --location "${{ parameters.location }}" \
-            --template-file "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/main.subscription.bicep" \
-            --parameters "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/subscription/east.parameters.json" \
+            --template-file "$(System.DefaultWorkingDirectory)/azresources/modules/main.subscription.bicep" \
+            --parameters "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/subscription/east.parameters.json" \
             --parameters location="${{ parameters.location }}" \
             --subscription "${{ parameters.subscriptionId }}"
 
@@ -61,8 +61,8 @@ steps:
           az deployment sub create \
             --name "${{ parameters.subscriptionName }}-resourcegroups-$(Build.BuildNumber)" \
             --location "${{ parameters.location }}" \
-            --template-file "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/main.resourcegroup.bicep" \
-            --parameters "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/resourcegroup/resourcegroup.east.parameters.json" \
+            --template-file "$(System.DefaultWorkingDirectory)/azresources/modules/main.resourcegroup.bicep" \
+            --parameters "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/resourcegroup/resourcegroup.east.parameters.json" \
             --parameters loc="${{ parameters.location }}" \
             --subscription "${{ parameters.subscriptionId }}"
 
@@ -79,8 +79,8 @@ steps:
           az deployment sub create \
             --name "${{ parameters.subscriptionName }}-network-$(Build.BuildNumber)" \
             --location "${{ parameters.location }}" \
-            --template-file "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/main.network.bicep" \
-            --parameters "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/network/network.basic.east.parameters.json" \
+            --template-file "$(System.DefaultWorkingDirectory)/azresources/modules/main.network.bicep" \
+            --parameters "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/network/network.basic.east.parameters.json" \
             --parameters loc="${{ parameters.location }}" \
             --subscription "${{ parameters.subscriptionId }}"
 
@@ -97,8 +97,8 @@ steps:
           az deployment sub create \
             --name "${{ parameters.subscriptionName }}-monitor-$(Build.BuildNumber)" \
             --location "${{ parameters.location }}" \
-            --template-file "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/main.monitor.bicep" \
-            --parameters "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/monitor/east.parameters.json" \
+            --template-file "$(System.DefaultWorkingDirectory)/azresources/modules/main.monitor.bicep" \
+            --parameters "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/monitor/east.parameters.json" \
             --parameters loc="${{ parameters.location }}" \
             --subscription "${{ parameters.subscriptionId }}"
 
@@ -115,8 +115,8 @@ steps:
           az deployment sub create \
             --name "${{ parameters.subscriptionName }}-backup-$(Build.BuildNumber)" \
             --location "${{ parameters.location }}" \
-            --template-file "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/main.backup.bicep" \
-            --parameters "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/backup/east.parameters.json" \
+            --template-file "$(System.DefaultWorkingDirectory)/azresources/modules/main.backup.bicep" \
+            --parameters "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/backup/east.parameters.json" \
             --parameters loc="${{ parameters.location }}" \
             --subscription "${{ parameters.subscriptionId }}"
   
@@ -133,8 +133,8 @@ steps:
           az deployment sub create \
             --name "${{ parameters.subscriptionName }}-recovery-$(Build.BuildNumber)" \
             --location "${{ parameters.location }}" \
-            --template-file "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/main.recovery.bicep" \
-            --parameters "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/recovery/east.parameters.json" \
+            --template-file "$(System.DefaultWorkingDirectory)/azresources/modules/main.recovery.bicep" \
+            --parameters "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/recovery/east.parameters.json" \
             --parameters loc="${{ parameters.location }}" \
             --subscription "${{ parameters.subscriptionId }}"
 
@@ -149,8 +149,8 @@ steps:
           Write-Host "Deploying Container Apps..."
           New-AzResourceGroupDeployment `
             -ResourceGroupName "${{ parameters.subscriptionName }}-dev-ciam-central-rg" `
-            -TemplateFile "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/containerApps.bicep" `
-            -TemplateParameterFile "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/containerApps.east.parameters.json" `
+            -TemplateFile "$(System.DefaultWorkingDirectory)/azresources/modules/main.containerApps.bicep" `
+            -TemplateParameterFile "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/containerApps.east.parameters.json" `
             -Verbose
         azurePowerShellVersion: 'LatestVersion'
         pwsh: true
@@ -166,8 +166,8 @@ steps:
           Write-Host "Deploying SQL Server..."
           New-AzResourceGroupDeployment `
             -ResourceGroupName "${{ parameters.subscriptionName }}-dev-ciam-central-rg" `
-            -TemplateFile "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/sqlServer.bicep" `
-            -TemplateParameterFile "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/sqlServer.east.parameters.json" `
+            -TemplateFile "$(System.DefaultWorkingDirectory)/azresources/modules/main.sqlServer.bicep" `
+            -TemplateParameterFile "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/sqlServer.east.parameters.json" `
             -Verbose
         azurePowerShellVersion: 'LatestVersion'
         pwsh: true
@@ -183,8 +183,8 @@ steps:
           Write-Host "Deploying NSG..."
           New-AzResourceGroupDeployment `
             -ResourceGroupName "${{ parameters.subscriptionName }}-dev-ciam-central-rg" `
-            -TemplateFile "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/nsg.bicep" `
-            -TemplateParameterFile "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/nsg.east.parameters.json" `
+            -TemplateFile "$(System.DefaultWorkingDirectory)/azresources/modules/main.nsg.bicep" `
+            -TemplateParameterFile "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/nsg.east.parameters.json" `
             -Verbose
         azurePowerShellVersion: 'LatestVersion'
         pwsh: true

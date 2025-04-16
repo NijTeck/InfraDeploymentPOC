@@ -68,7 +68,7 @@ steps:
         az deployment sub create \
           --name "${{ parameters.subscriptionName }}-rbac-$(date +%Y%m%d%H%M%S)" \
           --location "${{ parameters.location }}" \
-          --template-file "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/main.rbac.bicep" \
+          --template-file "$(System.DefaultWorkingDirectory)/azresources/modules/main.rbac.bicep" \
           --parameters @rbac_params.json \
           --subscription "${{ parameters.subscriptionId }}"
         
