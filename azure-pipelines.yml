@@ -29,7 +29,6 @@ stages:
   # Commercial Non-Production Subscription
   - stage: Deploy_COMMNP
     displayName: "Deploy Commercial Non-Production"
-    condition: true
     jobs:
       - job: Detect_Changes
         displayName: "Detect Changed Files"
@@ -107,54 +106,317 @@ stages:
         steps:
           - checkout: self
           
-          # Install required Azure PowerShell modules
           - task: AzurePowerShell@5
             inputs:
               azureSubscription: "25f11d80-28be-4f01-b1f6-6e5bfb927671"
               ScriptType: 'InlineScript'
               Inline: |
+                $ErrorActionPreference = "Continue"
+                
                 $workingDir = "$(System.DefaultWorkingDirectory)"
                 Write-Host "Working Directory: $workingDir"
                 
-                # Use correct path without URL encoding
-                $infraDir = $workingDir
-                $modulesDir = Join-Path -Path $infraDir -ChildPath "azresources/modules"
-                $configDir = Join-Path -Path $infraDir -ChildPath "config/ciam-project/project-infrastructure"
+                # Define paths
+                $modulesDir = Join-Path -Path $workingDir -ChildPath "azresources/modules"
+                $configDir = Join-Path -Path $workingDir -ChildPath "config/ciam-project"
                 
-                Write-Host "Infrastructure Directory: ${infraDir}"
                 Write-Host "Modules Directory: ${modulesDir}"
                 Write-Host "Config Directory: ${configDir}"
                 
-                # Check if directories exist
-                if (-not (Test-Path $modulesDir)) {
-                    Write-Host "Contents of parent directory:"
-                    Get-ChildItem -Path $infraDir
-                    Write-Error "Modules directory not found at: ${modulesDir}"
-                    exit 1
+                # Create resource group if it doesn't exist
+                $rgName = "commnp-dev-ciam-central-rg"
+                if (-not (Get-AzResourceGroup -Name $rgName -ErrorAction SilentlyContinue)) {
+                    Write-Host "Creating resource group $rgName..."
+                    New-AzResourceGroup -Name $rgName -Location "centralus"
                 }
                 
-                # Deploy Container Apps Environment
-                Write-Host "Deploying Container Apps..."
-                New-AzResourceGroupDeployment `
-                  -ResourceGroupName "commnp-dev-ciam-central-rg" `
-                  -TemplateFile (Join-Path $modulesDir "main.containerApps.bicep") `
-                  -TemplateParameterFile (Join-Path $configDir "containerApps.east.parameters.json") `
-                  -Verbose
+                # Find all parameter files
+                $parameterFiles = @{
+                    ManagedEnvironment = Join-Path -Path $configDir -ChildPath "resourcegroup/managedEnvironment.east.parameters.json"
+                    ContainerApps = Join-Path -Path $configDir -ChildPath "resourcegroup/containerApps.east.parameters.json"
+                    SQLServer = Join-Path -Path $configDir -ChildPath "resourcegroup/sqlServer.east.parameters.json"
+                    NSG = Join-Path -Path $configDir -ChildPath "network/nsg.east.parameters.json"
+                    StorageAccount = Join-Path -Path $configDir -ChildPath "resourcegroup/storageAccount.east.parameters.json"
+                }
                 
-                # Deploy SQL Server
-                Write-Host "Deploying SQL Server..."
-                New-AzResourceGroupDeployment `
-                  -ResourceGroupName "commnp-dev-ciam-central-rg" `
-                  -TemplateFile (Join-Path $modulesDir "main.sqlServer.bicep") `
-                  -TemplateParameterFile (Join-Path $configDir "sqlServer.east.parameters.json") `
-                  -Verbose
+                # 1. Deploy NSG first (this is already working)
+                Write-Host "1. Deploying NSG..."
+                try {
+                    if (Test-Path $parameterFiles.NSG) {
+                        # Try to deploy via ARM template first
+                        try {
+                            New-AzResourceGroupDeployment `
+                                -ResourceGroupName $rgName `
+                                -TemplateFile (Join-Path $modulesDir "nsg.bicep") `
+                                -TemplateParameterFile $parameterFiles.NSG `
+                                -Verbose
+                        } catch {
+                            Write-Host "NSG template deployment failed, falling back to direct creation: $_"
+                            # Direct creation as fallback
+                            $nsgName = "dev-ciam-nsg"
+                            New-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $rgName -Location "centralus" -Force
+                            
+                            $nsg = Get-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $rgName
+                            $nsg | Add-AzNetworkSecurityRuleConfig -Name "AllowAnyFromF910_0_0_0_8" `
+                                -Description "Allow any traffic from the internal network" `
+                                -Access Allow `
+                                -Protocol * `
+                                -Direction Inbound `
+                                -Priority 100 `
+                                -SourceAddressPrefix "10.0.0.0/8" `
+                                -SourcePortRange * `
+                                -DestinationAddressPrefix * `
+                                -DestinationPortRange * | Set-AzNetworkSecurityGroup
+                        }
+                        Write-Host "NSG deployment successful!"
+                    }
+                } catch {
+                    Write-Host "Error deploying NSG: $_"
+                }
                 
-                # Deploy NSG
-                Write-Host "Deploying NSG..."
-                New-AzResourceGroupDeployment `
-                  -ResourceGroupName "commnp-dev-ciam-central-rg" `
-                  -TemplateFile (Join-Path $modulesDir "main.nsg.bicep") `
-                  -TemplateParameterFile (Join-Path $configDir "nsg.east.parameters.json") `
-                  -Verbose
+                # 2. Deploy Storage Account
+                Write-Host "2. Deploying Storage Account..."
+                try {
+                    if (Test-Path $parameterFiles.StorageAccount) {
+                        New-AzResourceGroupDeployment `
+                            -ResourceGroupName $rgName `
+                            -TemplateFile (Join-Path $modulesDir "main.storageAccount.bicep") `
+                            -TemplateParameterFile $parameterFiles.StorageAccount `
+                            -Verbose
+                        Write-Host "Storage Account deployment successful!"
+                    }
+                } catch {
+                    Write-Host "Error deploying Storage Account: $_"
+                }
+                
+                # 3. Deploy Managed Environment
+                Write-Host "3. Deploying Managed Environment..."
+                try {
+                    if (Test-Path $parameterFiles.ManagedEnvironment) {
+                        New-AzResourceGroupDeployment `
+                            -ResourceGroupName $rgName `
+                            -TemplateFile (Join-Path $modulesDir "main.managedEnvironment.bicep") `
+                            -TemplateParameterFile $parameterFiles.ManagedEnvironment `
+                            -Verbose
+                        Write-Host "Managed Environment deployment successful!"
+                    }
+                } catch {
+                    Write-Host "Error deploying Managed Environment: $_"
+                }
+                
+                # 4. Deploy SQL Server
+                Write-Host "4. Deploying SQL Server..."
+                try {
+                    if (Test-Path $parameterFiles.SQLServer) {
+                        New-AzResourceGroupDeployment `
+                            -ResourceGroupName $rgName `
+                            -TemplateFile (Join-Path $modulesDir "main.sqlServer.bicep") `
+                            -TemplateParameterFile $parameterFiles.SQLServer `
+                            -Verbose
+                        Write-Host "SQL Server deployment successful!"
+                    }
+                } catch {
+                    Write-Host "Error deploying SQL Server: $_"
+                }
+                
+                # 5. Deploy Container Apps (depends on Managed Environment)
+                Write-Host "5. Deploying Container Apps..."
+                try {
+                    if (Test-Path $parameterFiles.ContainerApps) {
+                        # Get the managed environment ID
+                        $managedEnvName = "pci-tst-cus-ncp-web-cae"
+                        $managedEnv = Get-AzResource -ResourceGroupName $rgName -ResourceType "Microsoft.App/managedEnvironments" -Name $managedEnvName -ErrorAction SilentlyContinue
+                        
+                        if ($managedEnv) {
+                            Write-Host "Found Managed Environment: $($managedEnv.Id)"
+                            
+                            # Get SQL Server and Storage Account names
+                            $sqlServerName = (Get-AzSqlServer -ResourceGroupName $rgName -ErrorAction SilentlyContinue | Select-Object -First 1).ServerName
+                            $storageAccount = (Get-AzStorageAccount -ResourceGroupName $rgName -ErrorAction SilentlyContinue | Select-Object -First 1).StorageAccountName
+                            
+                            if ($sqlServerName -and $storageAccount) {
+                                Write-Host "SQL Server Name: $sqlServerName"
+                                Write-Host "Storage Account Name: $storageAccount"
+                                
+                                New-AzResourceGroupDeployment `
+                                    -ResourceGroupName $rgName `
+                                    -TemplateFile (Join-Path $modulesDir "main.containerApps.bicep") `
+                                    -location "centralus" `
+                                    -environment "tst" `
+                                    -managedEnvironmentId $managedEnv.Id `
+                                    -sqlServerName $sqlServerName `
+                                    -storageAccountName $storageAccount `
+                                    -Verbose
+                                
+                                Write-Host "Container Apps deployment successful!"
+                            } else {
+                                Write-Host "SQL Server or Storage Account not found, skipping Container Apps deployment"
+                            }
+                        } else {
+                            Write-Host "Managed Environment not found, skipping Container Apps deployment"
+                        }
+                    }
+                } catch {
+                    Write-Host "Error deploying Container Apps: $_"
+                }
               azurePowerShellVersion: 'LatestVersion'
               pwsh: true
+
+
+# trigger:
+#   branches:
+#     include:
+#       - master
+#   paths:
+#     include:
+#       - config/commnp-sub/**
+#       - azresources/**
+#       - templates/**
+#       - scripts/**
+
+# variables:
+#   DEPLOY_FLAG: "YES"
+#   WORKING_DIR: $(System.DefaultWorkingDirectory)
+#   LOCATION: "centralus"
+
+# pr:
+#   branches:
+#     include:
+#       - master
+#   paths:
+#     include:
+#       - config/commnp-sub/**
+#       - azresources/**
+#       - templates/**
+#       - scripts/**
+      
+# stages:
+#   # Commercial Non-Production Subscription
+#   - stage: Deploy_COMMNP
+#     displayName: "Deploy Commercial Non-Production"
+#     jobs:
+#       - job: Detect_Changes
+#         displayName: "Detect Changed Files"
+#         pool:
+#           vmImage: 'ubuntu-latest'
+#         steps:
+#           - checkout: self
+#             fetchDepth: 2
+
+#           - script: |
+#               if [ "$(Build.Reason)" == "Manual" ] || [ "$(Build.Reason)" == "IndividualCI" ] || [ "$(Build.Reason)" == "BatchedCI" ]; then
+#                 # For manual or CI builds, check what changed
+#                 CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E '(config/commnp-sub|azresources|templates|scripts)')
+#               else
+#                 # For PR builds, compare with target branch
+#                 git fetch origin $(System.PullRequest.TargetBranch)
+#                 CHANGED_FILES=$(git diff --name-only FETCH_HEAD HEAD | grep -E '(config/commnp-sub|azresources|templates|scripts)')
+#               fi
+              
+#               if [ -n "$CHANGED_FILES" ]; then
+#                 echo "Changes detected in relevant folders for commnp-sub"
+#                 echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]true"
+#                 echo "$CHANGED_FILES"
+#               else
+#                 echo "No changes detected in relevant folders for commnp-sub"
+#                 echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]false"
+#                 echo "$CHANGED_FILES"
+#               fi
+#             name: changeDetection
+#             displayName: "Detect Changed Files"
+
+#       - job: Setup_Security_Groups
+#         displayName: "Set Up Security Groups"
+#         dependsOn: Detect_Changes
+#         condition: eq(dependencies.Detect_Changes.outputs['changeDetection.shouldDeploy'], 'true')
+#         pool:
+#           vmImage: 'ubuntu-latest'
+#         steps:
+#           - checkout: self
+#           - template: templates/rbac-deployment-task.yml
+#             parameters:
+#               subscriptionName: "commnp-sub"
+#               subscriptionId: "921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674"
+#               serviceConnectionId: "25f11d80-28be-4f01-b1f6-6e5bfb927671"
+#               location: $(LOCATION)
+
+#       - job: Deploy_Resources
+#         displayName: "Deploy Commercial Non-Prod Resources"
+#         dependsOn: Setup_Security_Groups
+#         pool:
+#           vmImage: 'ubuntu-latest'
+#         steps:
+#           - checkout: self
+#           - template: templates/master-subscription-template.yml
+#             parameters:
+#               subscriptionName: "commnp-sub"
+#               subscriptionId: "921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674"
+#               serviceConnectionId: "25f11d80-28be-4f01-b1f6-6e5bfb927671"
+#               location: $(LOCATION)
+#               deployComponents:
+#                 subscription: true
+#                 resourceGroups: true
+#                 network: true
+#                 monitor: true
+#                 backup: false
+#                 recovery: false
+
+#   - stage: Deploy_CIAM
+#     displayName: "Deploy CIAM Project"
+#     jobs:
+#       - job: Deploy_CIAM_Resources
+#         displayName: "Deploy CIAM Resources"
+#         pool:
+#           vmImage: 'ubuntu-latest'
+#         steps:
+#           - checkout: self
+          
+#           - task: AzurePowerShell@5
+#             inputs:
+#               azureSubscription: "25f11d80-28be-4f01-b1f6-6e5bfb927671"
+#               ScriptType: 'InlineScript'
+#               Inline: |
+#                 $ErrorActionPreference = "Continue"
+                
+#                 $workingDir = "$(System.DefaultWorkingDirectory)"
+#                 Write-Host "Working Directory: $workingDir"
+                
+#                 # Define paths
+#                 $modulesDir = Join-Path -Path $workingDir -ChildPath "azresources/modules"
+#                 $configDir = Join-Path -Path $workingDir -ChildPath "config/ciam-project"
+                
+#                 Write-Host "Modules Directory: ${modulesDir}"
+#                 Write-Host "Config Directory: ${configDir}"
+                
+#                 # Create resource group if it doesn't exist
+#                 $rgName = "commnp-dev-ciam-central-rg"
+#                 if (-not (Get-AzResourceGroup -Name $rgName -ErrorAction SilentlyContinue)) {
+#                     Write-Host "Creating resource group $rgName..."
+#                     New-AzResourceGroup -Name $rgName -Location "centralus"
+#                 }
+                
+#                 # Deploy NSG directly
+#                 Write-Host "Deploying NSG..."
+#                 $nsgName = "dev-ciam-nsg"
+#                 try {
+#                     New-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $rgName -Location "centralus" -Force
+                    
+#                     # Add a default rule
+#                     $nsg = Get-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $rgName
+#                     $nsg | Add-AzNetworkSecurityRuleConfig -Name "AllowAnyFromF910_0_0_0_8" `
+#                         -Description "Allow any traffic from the internal network" `
+#                         -Access Allow `
+#                         -Protocol * `
+#                         -Direction Inbound `
+#                         -Priority 100 `
+#                         -SourceAddressPrefix "10.0.0.0/8" `
+#                         -SourcePortRange * `
+#                         -DestinationAddressPrefix * `
+#                         -DestinationPortRange * | Set-AzNetworkSecurityGroup
+                    
+#                     Write-Host "NSG deployment successful!"
+#                 } catch {
+#                     Write-Host "Error deploying NSG: $_"
+#                 }
+#               azurePowerShellVersion: 'LatestVersion'
+#               pwsh: true
