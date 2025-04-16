@@ -1,0 +1,244 @@
+trigger:
+  branches:
+    include:
+      - master
+  paths:
+    include:
+      - config/commnp-sub/**
+      - azresources/**
+      - templates/**
+      - scripts/**
+
+variables:
+  DEPLOY_FLAG: "YES"
+  WORKING_DIR: $(System.DefaultWorkingDirectory)/azure-mono-deployment
+  LOCATION: "centralus"
+
+pr:
+  branches:
+    include:
+      - master
+  paths:
+    include:
+      - config/commnp-sub/**
+      - azresources/**
+      - templates/**
+      - scripts/**
+      
+stages:
+  # Commercial Non-Production Subscription
+  - stage: Deploy_COMMNP
+    displayName: "Deploy Commercial Non-Production"
+    condition: true
+    jobs:
+      - job: Detect_Changes
+        displayName: "Detect Changed Files"
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+            fetchDepth: 2
+
+          - script: |
+              if [ "$(Build.Reason)" == "Manual" ] || [ "$(Build.Reason)" == "IndividualCI" ] || [ "$(Build.Reason)" == "BatchedCI" ]; then
+                # For manual or CI builds, check what changed
+                CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E '(config/commnp-sub|azresources|templates|scripts)')
+              else
+                # For PR builds, compare with target branch
+                git fetch origin $(System.PullRequest.TargetBranch)
+                CHANGED_FILES=$(git diff --name-only FETCH_HEAD HEAD | grep -E '(config/commnp-sub|azresources|templates|scripts)')
+              fi
+              
+              if [ -n "$CHANGED_FILES" ]; then
+                echo "Changes detected in relevant folders for commnp-sub"
+                echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]true"
+                echo "$CHANGED_FILES"
+              else
+                echo "No changes detected in relevant folders for commnp-sub"
+                echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]false"
+                echo "$CHANGED_FILES"
+              fi
+            name: changeDetection
+            displayName: "Detect Changed Files"
+
+      - job: Setup_Security_Groups
+        displayName: "Set Up Security Groups"
+        dependsOn: Detect_Changes
+        condition: eq(dependencies.Detect_Changes.outputs['changeDetection.shouldDeploy'], 'true')
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          - template: templates/rbac-deployment-task.yml
+            parameters:
+              subscriptionName: "commnp-sub"
+              subscriptionId: "921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674"
+              serviceConnectionId: "25f11d80-28be-4f01-b1f6-6e5bfb927671"
+              location: $(LOCATION)
+
+      - job: Deploy_Resources
+        displayName: "Deploy Commercial Non-Prod Resources"
+        dependsOn: Setup_Security_Groups
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          - template: templates/master-subscription-template.yml
+            parameters:
+              subscriptionName: "commnp-sub"
+              subscriptionId: "921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674"
+              serviceConnectionId: "25f11d80-28be-4f01-b1f6-6e5bfb927671"
+              location: $(LOCATION)
+              deployComponents:
+                subscription: true
+                resourceGroups: true
+                network: true
+                monitor: true
+                backup: false
+                recovery: false
+
+  # # Commercial Production Subscription
+  # - stage: Deploy_COMMPROD
+  #   displayName: "Deploy Commercial Production"
+  #   condition: true
+  #   jobs:
+  #     - job: Detect_Changes
+  #       displayName: "Detect Changed Files"
+  #       pool:
+  #         vmImage: 'ubuntu-latest'
+  #       steps:
+  #         - checkout: self
+  #           fetchDepth: 2
+
+  #         - script: |
+  #             if [ "$(Build.Reason)" == "Manual" ] || [ "$(Build.Reason)" == "IndividualCI" ] || [ "$(Build.Reason)" == "BatchedCI" ]; then
+  #               # For manual or CI builds, check what changed
+  #               CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E '(config/commprod-sub|azresources|templates|scripts)')
+  #             else
+  #               # For PR builds, compare with target branch
+  #               git fetch origin $(System.PullRequest.TargetBranch)
+  #               CHANGED_FILES=$(git diff --name-only FETCH_HEAD HEAD | grep -E '(config/commprod-sub|azresources|templates|scripts)')
+  #             fi
+              
+  #             if [ -n "$CHANGED_FILES" ]; then
+  #               echo "Changes detected in relevant folders for commprod-sub"
+  #               echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]true"
+  #               echo "$CHANGED_FILES"
+  #             else
+  #               echo "No changes detected in relevant folders for commprod-sub"
+  #               echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]false"
+  #               echo "$CHANGED_FILES"
+  #             fi
+  #           name: changeDetection
+  #           displayName: "Detect Changed Files"
+
+  #     - job: Setup_Security_Groups
+  #       displayName: "Set Up Security Groups"
+  #       dependsOn: Detect_Changes
+  #       condition: eq(dependencies.Detect_Changes.outputs['changeDetection.shouldDeploy'], 'true')
+  #       pool:
+  #         vmImage: 'ubuntu-latest'
+  #       steps:
+  #         - checkout: self
+  #         - template: templates/rbac-deployment-task.yml
+  #           parameters:
+  #             subscriptionName: "commprod-sub"
+  #             subscriptionId: "94010bcc-f819-44ae-8f50-9a69e46d6bb7"
+  #             serviceConnectionId: "7ad47311-d1ac-47fe-8359-9a3d5dafef2e"
+  #             location: $(LOCATION)
+
+  #     - job: Deploy_Resources
+  #       displayName: "Deploy Commercial Prod Resources"
+  #       dependsOn: Setup_Security_Groups
+  #       pool:
+  #         vmImage: 'ubuntu-latest'
+  #       steps:
+  #         - checkout: self
+  #         - template: templates/master-subscription-template.yml
+  #           parameters:
+  #             subscriptionName: "commprod-sub"
+  #             subscriptionId: "94010bcc-f819-44ae-8f50-9a69e46d6bb7"
+  #             serviceConnectionId: "7ad47311-d1ac-47fe-8359-9a3d5dafef2e"
+  #             location: $(LOCATION)
+  #             deployComponents:
+  #               subscription: true
+  #               resourceGroups: true
+  #               network: true
+  #               monitor: true
+  #               backup: false
+  #               recovery: false
+
+  # Additional subscription stages can be added in a similar pattern
+
+  - stage: Deploy_CIAM
+    displayName: "Deploy CIAM Project"
+    jobs:
+      - job: Deploy_CIAM_Resources
+        displayName: "Deploy CIAM Resources"
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          
+          # Install required Azure PowerShell modules
+          - task: AzurePowerShell@5
+            inputs:
+              azureSubscription: "25f11d80-28be-4f01-b1f6-6e5bfb927671"
+              ScriptType: 'InlineScript'
+              Inline: |
+                $workingDir = "$(System.DefaultWorkingDirectory)"
+                Write-Host "Working Directory: $workingDir"
+                
+                # Use URL-encoded path with %20 instead of space
+                $infraDir = Join-Path -Path $workingDir -ChildPath "InfraDeployment%20POC"
+                $modulesDir = Join-Path -Path $infraDir -ChildPath "azresources/modules"
+                $configDir = Join-Path -Path $infraDir -ChildPath "config/ciam-project/project-infrastructure"
+                
+                Write-Host "Infrastructure Directory: ${infraDir}"
+                Write-Host "Modules Directory: ${modulesDir}"
+                Write-Host "Config Directory: ${configDir}"
+                
+                if (-not (Test-Path $infraDir)) {
+                    Write-Host "Infrastructure directory not found. Listing parent directory contents:"
+                    Get-ChildItem -Path $workingDir
+                    Write-Error "Infrastructure directory not found at: ${infraDir}"
+                    exit 1
+                }
+                
+                if (-not (Test-Path $modulesDir)) {
+                    Write-Host "Contents of infrastructure directory:"
+                    Get-ChildItem -Path "${infraDir}"
+                    Write-Error "Modules directory not found at: ${modulesDir}"
+                    exit 1
+                }
+                
+                if (-not (Test-Path $configDir)) {
+                    Write-Error "Config directory not found at: ${configDir}"
+                    exit 1
+                }
+
+                # Deploy Container Apps Environment
+                Write-Host "Deploying Container Apps..."
+                New-AzResourceGroupDeployment `
+                  -ResourceGroupName "commnp-dev-ciam-central-rg" `
+                  -TemplateFile (Join-Path $modulesDir "containerApps.bicep") `
+                  -TemplateParameterFile (Join-Path $configDir "containerApps.east.parameters.json") `
+                  -Verbose
+                
+                # Deploy SQL Server
+                Write-Host "Deploying SQL Server..."
+                New-AzResourceGroupDeployment `
+                  -ResourceGroupName "commnp-dev-ciam-central-rg" `
+                  -TemplateFile (Join-Path $modulesDir "sqlServer.bicep") `
+                  -TemplateParameterFile (Join-Path $configDir "sqlServer.east.parameters.json") `
+                  -Verbose
+                
+                # Deploy NSG
+                Write-Host "Deploying NSG..."
+                New-AzResourceGroupDeployment `
+                  -ResourceGroupName "commnp-dev-ciam-central-rg" `
+                  -TemplateFile (Join-Path $modulesDir "nsg.bicep") `
+                  -TemplateParameterFile (Join-Path $configDir "nsg.east.parameters.json") `
+                  -Verbose
+              azurePowerShellVersion: 'LatestVersion'
+              pwsh: true

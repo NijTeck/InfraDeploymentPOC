@@ -1,0 +1,85 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "loc": {
+        "value": "cus"
+      },
+      "subscription": {
+        "value": {
+          "name": "commnp"
+        }
+      },
+      "monitor": {
+        "value": {
+          "actionGroup": {
+            "actionGroupName": "action-group",
+            "actionGroupShortName": "actgrp",
+            "webhookReceivers": []
+          },
+          "resourceGroupTags": {
+            "Criticality": "Non-Production",
+            "ProductId": "PL24_1698",
+            "WorkloadName": "Infrastructure Monitoring"
+          },
+          "serviceHealth": {
+            "alertRuleName": "Service Health - Platform Notifications",
+            "alertRuleDescription": "Alert on service health incidents",
+            "condition": [
+              {
+                "field": "category",
+                "equals": "ServiceHealth",
+                "containsAny": null
+              },
+              {
+                "field": "properties.impactedServices[*].ImpactedRegions[*].RegionName",
+                "containsAny": [
+                  "Global",
+                  "central us"
+                ]
+              }
+            ],
+            "webhookProperties": {
+              "owner": "commnp",
+              "serviceClass": "Non-Production"
+            }
+          },
+          "activityLogAlerts": [
+            {
+              "name": "Azure Security Solutions Write",
+              "isEnabled": true,
+              "alertDescription": "Alert when security solutions are written",
+              "actions": [],
+              "conditions": [
+                {
+                  "field": "category",
+                  "equals": "Administrative"
+                },
+                {
+                  "field": "operationName",
+                  "equals": "Microsoft.Security/securitySolutions/write"
+                }
+              ]
+            },
+            {
+              "name": "SQL Server Firewall Rule Delete",
+              "isEnabled": true,
+              "alertDescription": "Alert when SQL Server firewall rules are deleted",
+              "actions": [],
+              "conditions": [
+                {
+                  "field": "category",
+                  "equals": "Administrative"
+                },
+                {
+                  "field": "operationName",
+                  "equals": "Microsoft.Sql/servers/firewallRules/delete"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  }
+  

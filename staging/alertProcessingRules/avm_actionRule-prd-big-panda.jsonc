@@ -1,0 +1,47 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "aprName": {
+            "value": "Production Critical Error and Warning Alerts to Big Panda"
+        },
+        "aprActions": {
+            "value": [
+                {
+                    "actionGroupIds": [
+                        "/subscriptions/1f23b7b8-6752-4a31-9573-4d85277c2101/resourceGroups/f9infra-management-monitor-east-rg/providers/Microsoft.Insights/actiongroups/f9infra-management-big-panda-relay" // add this 
+                    ],
+                    "actionType": "AddActionGroups"
+                }
+            ]
+        },
+        "aprDescription": {
+            "value": "Pulls in the Big Panda relay action group to create a notification for all Monitor alerts that are Severity 0 (Critical), 1 (Error), or 2 (Warning)."
+        },
+        "aprConditions": {
+            "value": [
+                {
+                    "field": "Severity",
+                    "operator": "Equals",
+                    "values": [
+                        "Sev0",
+                        "Sev1",
+                        "Sev2"
+                    ]
+                }
+            ]
+        },
+        "isEnabled": {
+            "value": true
+        },
+        "location": {
+            "value": "global"
+        },
+        "roleAssignmentsList": {
+            "value": []
+        },
+        "schedule": {
+            "value": {}
+        }
+    }
+}

@@ -1,0 +1,80 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "alertName": {
+            "value": "VM CPU Percent Above Threshold"
+        },
+        "alertCriteria": {
+            "value": {
+                "allOf": [
+                        {
+                            "query": "InsightsMetrics\r\n| where Origin == \"vm.azm.ms\"\r\n| where Namespace == \"Processor\" and Name == \"UtilizationPercentage\"\r\n| summarize AggregatedValue = avg(Val) by bin(TimeGenerated, 15m), Computer, _ResourceId\r\n",
+                            "timeAggregation": "Average",
+                            "metricMeasureColumn": "AggregatedValue",
+                            "dimensions": [
+                                {
+                                    "name": "Computer",
+                                    "operator": "Include",
+                                    "values": [
+                                        "*"
+                                    ]
+                                }
+                            ],
+                            "resourceIdColumn": "_ResourceId",
+                            "operator": "GreaterThan",
+                            "threshold": 85,
+                            "failingPeriods": {
+                                "numberOfEvaluationPeriods": 1,
+                                "minFailingPeriodsToAlert": 1
+                            }
+                        }
+                    ]
+            }
+        }, 
+        "alertActions": {
+            "value": []
+        }, 
+        "alertDescription": {
+            "value": "Log query alert that triggers when a virtual machine's CPU utilization average exceeds the defined threshold."
+        },
+        "alertDisplayName": {
+            "value": "VM CPU % Above Threshold"
+        },
+        "autoMitigate": {
+            "value": true
+        },
+        "isEnabled": {
+            "value": true
+        },
+        "alertEvalFrequency": {
+            "value": "PT5M"
+        },
+        "alertKind": {  
+            "value": "LogAlert"
+        },
+        "alertLocation": {
+            "value": "centralus"
+        }, 
+        "roleAssignmentsList": {
+            "value": []
+        },
+        "ruleResolvedConfiguration": {
+            "value": {}
+        },
+        "alertSeverity": {
+            "value": 2
+        },
+        "skipQueryValidation": {
+            "value": false
+        },
+        "alertWindowSize": {
+            "value": "PT15M"
+        }, 
+        "scopes": {
+            "value": [
+                "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxx"
+            ]
+        }
+    }
+}

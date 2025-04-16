@@ -1,0 +1,73 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "storageAccounts_name": {
+            "value": "pcitstncp"
+        },
+        "location": {
+            "value": "centralus"
+        },
+        "tags": {
+            "value": {
+                "Environment": "Testing",
+                "Creator": "Lesere, azadm, azadm.lesere@flyfrontier.onmicrosoft.com",
+                "ReviewDate": "01/22/2026",
+                "Diagnostics": "true",
+                "DateCreated": "01/22/2025",
+                "LastModifiedBy": "Lesere, azadm, azadm.lesere@flyfrontier.onmicrosoft.com",
+                "DateLastModified": "04/02/2025"
+            }
+        },
+        "sku": {
+            "value": {
+                "name": "Standard_LRS"
+            }
+        },
+        "kind": {
+            "value": "StorageV2"
+        },
+        "minimumTlsVersion": {
+            "value": "TLS1_2"
+        },
+        "allowBlobPublicAccess": {
+            "value": false
+        },
+        "networkAcls": {
+            "value": {
+                "bypass": "AzureServices",
+                "defaultAction": "Deny",
+                "ipRules": [],
+                "virtualNetworkRules": []
+            }
+        },
+        "supportsHttpsTrafficOnly": {
+            "value": true
+        },
+        "allowSharedKeyAccess": {
+            "value": true
+        },
+        "accessTier": {
+            "value": "Hot"
+        },
+        "publicNetworkAccess": {
+            "value": "Disabled"
+        },
+        "isHnsEnabled": {
+            "value": false
+        },
+        "isSftpEnabled": {
+            "value": false
+        },
+        "routingPreference": {
+            "value": {
+                "routingChoice": "MicrosoftRouting",
+                "publishMicrosoftEndpoints": false,
+                "publishInternetEndpoints": false
+            }
+        },
+        "defaultToOAuthAuthentication": {
+            "value": false
+        }
+    }
+} 

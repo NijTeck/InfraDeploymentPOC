@@ -1,0 +1,53 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "servers_name": {
+            "value": "dev-ciam-sql"
+        },
+        "location": {
+            "value": "centralus"
+        },
+        "tags": {
+            "value": {
+                "Environment": "Non-Production",
+                "Department": "IT",
+                "Criticality": "4",
+                "ServiceClass": "Non-Production",
+                "WorkloadName": "ncp-ciam"
+            }
+        },
+        "administratorLogin": {
+            "value": "ncpsqladmin"
+        },
+        "administrators": {
+            "value": {
+                "administratorType": "ActiveDirectory",
+                "principalType": "User",
+                "login": "azadm.lesere@flyfrontier.onmicrosoft.com",
+                "sid": "S-1-5-21-1234567890-1234567890-1234567890-1234",
+                "tenantId": "12345678-1234-1234-1234-123456789012"
+            }
+        },
+        "databases": {
+            "value": [
+                {
+                    "name": "identity-web",
+                    "sku": {
+                        "name": "Basic",
+                        "tier": "Basic",
+                        "capacity": 5
+                    }
+                },
+                {
+                    "name": "dev-ciam-sqlDB01",
+                    "sku": {
+                        "name": "Basic",
+                        "tier": "Basic",
+                        "capacity": 5
+                    }
+                }
+            ]
+        }
+    }
+} 

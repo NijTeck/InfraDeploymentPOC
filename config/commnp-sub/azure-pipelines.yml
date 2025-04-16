@@ -1,0 +1,13 @@
+steps:
+  - template: ../../templates/master-subscription-template.yml
+    parameters:
+      subscriptionName: "commnp-sub"
+      subscriptionId: "921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674"
+      serviceConnectionId: "25f11d80-28be-4f01-b1f6-6e5bfb927671"
+      deployComponents:
+        subscription: false
+        resourceGroups: false
+        network: true
+        monitor: false
+        backup: false
+        recovery: false

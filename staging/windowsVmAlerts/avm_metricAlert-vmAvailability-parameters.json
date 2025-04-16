@@ -1,0 +1,58 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "alertName": {
+            "value": "VM Availability"
+        },
+        "alertCriteria": {
+            "value": {
+                "allOf": [
+                    {
+                        "criterionType": "StaticThresholdCriterion",
+                        "metricName": "VmAvailabilityMetric",
+                        "metricNamespace": "Microsoft.Compute/virtualMachines", 
+                        "name": "VmAvailabilityMetric",
+                        "operator": "LessThan",
+                        "threshold": "1",
+                        "timeAggregation": "Average"
+                    }
+                ],
+                "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria"
+            }
+        },
+        "alertActions":{
+            "value": []
+        }, 
+        "alertLocation":{
+            "value": "global"
+        }, 
+        "roleAssignmentsList":{
+            "value": []
+        },
+        "alertDescription":{
+            "value": "Triggers when a virtual machine is deallocated."
+        },
+        "autoMitigate":{
+            "value": true
+        },
+        "isEnabled":{
+            "value": true
+        }, 
+        "alertEvalFrequency":{
+            "value": "PT5M"
+        },
+        "alertSeverity":{
+            "value": 3
+        }, 
+        "alertWindowSize":{
+            "value": "PT5M"
+        }, 
+        "alertTargetResourceType":{
+            "value": "Microsoft.Compute/virtualMachines"
+        },
+        "alertTargetResourceRegion":{
+            "value": "centralus"
+        }
+    }
+}

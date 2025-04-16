@@ -1,0 +1,78 @@
+parameters:
+  # Required parameters
+  subscriptionName: ''
+  subscriptionId: ''
+  serviceConnectionId: ''
+  location: 'centralus'
+
+steps:
+  - task: AzurePowerShell@5
+    displayName: "Create Entra ID Security Groups"
+    name: createSecurityGroups
+    inputs:
+      azureSubscription: '${{ parameters.serviceConnectionId }}'
+      ScriptPath: '$(System.DefaultWorkingDirectory)/scripts/Auto-Create-EntraID-Groups.ps1'
+      ScriptArguments: '-SubscriptionId "${{ parameters.subscriptionId }}" -SubscriptionName "${{ parameters.subscriptionName }}"'
+      azurePowerShellVersion: 'LatestVersion'
+      pwsh: true
+      errorActionPreference: 'Continue'
+  
+  - task: AzureCLI@2
+    displayName: "Deploy RBAC Configuration"
+    inputs:
+      azureSubscription: '${{ parameters.serviceConnectionId }}'
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        echo "Deploying RBAC configuration using Bicep..."
+        
+        # Get group IDs from previous task
+        CONTRIBUTORS_GROUP_ID="$(createSecurityGroups.SubContributorsGroupId)"
+        READERS_GROUP_ID="$(createSecurityGroups.SubReadersGroupId)"
+        
+        echo "Contributors Group ID: $CONTRIBUTORS_GROUP_ID"
+        echo "Readers Group ID: $READERS_GROUP_ID"
+        
+        # Create a temporary parameter file for the RBAC deployment
+        cat > rbac_params.json << EOF
+        {
+          "\$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+          "contentVersion": "1.0.0.0",
+          "parameters": {
+            "rbac": {
+              "value": {
+                "subscriptionRoleAssignments": [
+                  {
+                    "comments": "Built-in Role: Contributor",
+                    "roleDefinitionId": "b24988ac-6180-42a0-ab88-20f7382dd24c",
+                    "securityGroupObjectIds": [
+                      "$CONTRIBUTORS_GROUP_ID"
+                    ]
+                  },
+                  {
+                    "comments": "Built-in Role: Reader",
+                    "roleDefinitionId": "acdd72a7-3385-48ef-bd42-f606fba81ae7",
+                    "securityGroupObjectIds": [
+                      "$READERS_GROUP_ID"
+                    ]
+                  }
+                ],
+                "resourceGroupRoleAssignments": []
+              }
+            }
+          }
+        }
+        EOF
+        
+        # Deploy the RBAC configuration using Bicep
+        az deployment sub create \
+          --name "${{ parameters.subscriptionName }}-rbac-$(date +%Y%m%d%H%M%S)" \
+          --location "${{ parameters.location }}" \
+          --template-file "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/main.rbac.bicep" \
+          --parameters @rbac_params.json \
+          --subscription "${{ parameters.subscriptionId }}"
+        
+        # Clean up temp file  
+        rm rbac_params.json
+        
+        echo "RBAC configuration deployment completed"

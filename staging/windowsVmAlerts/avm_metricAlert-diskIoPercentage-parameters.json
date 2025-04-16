@@ -1,0 +1,58 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "alertName": {
+            "value": "Data Disk IOPS Consumed Percentage"
+        },
+        "alertCriteria": {
+            "value": {
+                "allOf": [
+                    {
+                        "criterionType": "StaticThresholdCriterion",
+                        "metricName": "Data Disk IOPS Consumed Percentage",
+                        "metricNamespace": "Microsoft.Compute/virtualMachines", 
+                        "name": "Data Disk IOPS Consumed Percentage",
+                        "operator": "GreaterThan",
+                        "threshold": "95",
+                        "timeAggregation": "Average"
+                    }
+                ],
+                "odata.type": "Microsoft.Azure.Monitor.MultipleResourceMultipleMetricCriteria"
+            }
+        },
+        "alertActions":{
+            "value": []
+        }, 
+        "alertLocation":{
+            "value": "global"
+        }, 
+        "roleAssignmentsList":{
+            "value": []
+        },
+        "alertDescription":{
+            "value": "Triggers when disk I/O percentage consumed per minute exceeds the threshold defined."
+        },
+        "autoMitigate":{
+            "value": true
+        },
+        "isEnabled":{
+            "value": true
+        }, 
+        "alertEvalFrequency":{
+            "value": "PT5M"
+        },
+        "alertSeverity":{
+            "value": 3
+        }, 
+        "alertWindowSize":{
+            "value": "PT5M"
+        }, 
+        "alertTargetResourceType":{
+            "value": "Microsoft.Compute/virtualMachines"
+        },
+        "alertTargetResourceRegion":{
+            "value": "centralus"
+        }
+    }
+}

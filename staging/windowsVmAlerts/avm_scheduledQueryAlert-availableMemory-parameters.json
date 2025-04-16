@@ -1,0 +1,80 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "alertName": {
+            "value": "VM Available Memory Below Threshold"
+        },
+        "alertCriteria": {
+            "value": {
+                "allOf": [
+                        {
+                            "query": "InsightsMetrics\r\n| where Origin == \"vm.azm.ms\"\r\n| where Namespace == \"Memory\" and Name == \"AvailableMB\"\r\n| extend TotalMemory = toreal(todynamic(Tags)[\"vm.azm.ms/memorySizeMB\"])\r\n| extend AvailableMemoryPercentage = (toreal(Val) / TotalMemory) * 100.0\r\n| summarize AggregatedValue = avg(AvailableMemoryPercentage) by bin(TimeGenerated, 15m), Computer, _ResourceId\r\n",
+                            "timeAggregation": "Average",
+                            "metricMeasureColumn": "AggregatedValue",
+                            "dimensions": [
+                                {
+                                    "name": "Computer",
+                                    "operator": "Include",
+                                    "values": [
+                                        "*"
+                                    ]
+                                }
+                            ],
+                            "resourceIdColumn": "_ResourceId",
+                            "operator": "LessThan",
+                            "threshold": 10,
+                            "failingPeriods": {
+                                "numberOfEvaluationPeriods": 1,
+                                "minFailingPeriodsToAlert": 1
+                            }
+                        }
+                    ]
+            }
+        }, 
+        "alertActions": {
+            "value": []
+        }, 
+        "alertDescription": {
+            "value": "Log query alert that triggers when a virtual machine's available memory average falls below the defined threshold."
+        },
+        "alertDisplayName": {
+            "value": "VM Available Memory Below Threshold (10 %)"
+        },
+        "autoMitigate": {
+            "value": true
+        },
+        "isEnabled": {
+            "value": true
+        },
+        "alertEvalFrequency": {
+            "value": "PT5M"
+        },
+        "alertKind": {  
+            "value": "LogAlert"
+        },
+        "alertLocation": {
+            "value": "centralus"
+        }, 
+        "roleAssignmentsList": {
+            "value": []
+        },
+        "ruleResolvedConfiguration": {
+            "value": {}
+        },
+        "alertSeverity": {
+            "value": 2
+        },
+        "skipQueryValidation": {
+            "value": false
+        },
+        "alertWindowSize": {
+            "value": "PT15M"
+        }, 
+        "scopes": {
+            "value": [
+                "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxx"
+            ]
+        }
+    }
+}

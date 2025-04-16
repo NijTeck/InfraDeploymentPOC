@@ -1,0 +1,31 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "centralus"
+    },
+    "environment": {
+      "value": "tst"
+    },
+    "subscriptionId": {
+      "value": "921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674"
+    },
+    "resourceGroupName": {
+      "value": "rg-ciam-tst"
+    },
+    "virtualNetworkId": {
+      "value": "/subscriptions/921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674/resourceGroups/rg-network-tst/providers/Microsoft.Network/virtualNetworks/vnet-tst"
+    },
+    "privateDnsZones": {
+      "value": {
+        "sqlServer": "/subscriptions/921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674/resourceGroups/rg-dns-tst/providers/Microsoft.Network/privateDnsZones/privatelink.database.windows.net",
+        "blob": "/subscriptions/921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674/resourceGroups/rg-dns-tst/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net",
+        "file": "/subscriptions/921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674/resourceGroups/rg-dns-tst/providers/Microsoft.Network/privateDnsZones/privatelink.file.core.windows.net"
+      }
+    },
+    "vulnerabilityAssessmentsStorageContainerPath": {
+      "value": "https://stciamtst.blob.core.windows.net/vulnerability-assessments"
+    }
+  }
+} 

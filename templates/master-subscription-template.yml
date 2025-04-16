@@ -1,0 +1,190 @@
+parameters:
+  # Required parameters
+  subscriptionName: ''
+  subscriptionId: ''
+  serviceConnectionId: ''
+  
+  # Optional parameters with defaults
+  deployComponents:
+    subscription: false
+    resourceGroups: false
+    network: false
+    monitor: false
+    backup: false
+    recovery: false
+    containerApps: false
+    sqlServer: false
+    nsg: false
+  location: 'centralus'
+
+steps:
+  # Connect to the subscription
+  - task: AzureCLI@2
+    displayName: "Authenticate to ${{ parameters.subscriptionName }}"
+    inputs:
+      azureSubscription: '${{ parameters.serviceConnectionId }}'
+      scriptType: 'bash'
+      scriptLocation: 'inlineScript'
+      inlineScript: |
+        echo "Connected to subscription ${{ parameters.subscriptionName }} (${{ parameters.subscriptionId }})"
+        az account show -o table
+
+  # Deploy subscription-level resources if enabled
+  - ${{ if eq(parameters.deployComponents.subscription, true) }}:
+    - task: AzureCLI@2
+      displayName: "Deploy Subscription Configuration"
+      inputs:
+        azureSubscription: '${{ parameters.serviceConnectionId }}'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Deploying subscription configuration..."
+          az deployment sub create \
+            --name "${{ parameters.subscriptionName }}-subscription-$(Build.BuildNumber)" \
+            --location "${{ parameters.location }}" \
+            --template-file "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/main.subscription.bicep" \
+            --parameters "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/subscription/east.parameters.json" \
+            --parameters location="${{ parameters.location }}" \
+            --subscription "${{ parameters.subscriptionId }}"
+
+  # Deploy resource groups if enabled
+  - ${{ if eq(parameters.deployComponents.resourceGroups, true) }}:
+    # First, deploy the resource groups
+    - task: AzureCLI@2
+      displayName: "Deploy Resource Groups"
+      inputs:
+        azureSubscription: '${{ parameters.serviceConnectionId }}'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Deploying resource groups..."
+          az deployment sub create \
+            --name "${{ parameters.subscriptionName }}-resourcegroups-$(Build.BuildNumber)" \
+            --location "${{ parameters.location }}" \
+            --template-file "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/main.resourcegroup.bicep" \
+            --parameters "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/resourcegroup/resourcegroup.east.parameters.json" \
+            --parameters loc="${{ parameters.location }}" \
+            --subscription "${{ parameters.subscriptionId }}"
+
+  # Deploy network resources if enabled
+  - ${{ if eq(parameters.deployComponents.network, true) }}:
+    - task: AzureCLI@2
+      displayName: "Deploy Network Resources"
+      inputs:
+        azureSubscription: '${{ parameters.serviceConnectionId }}'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Deploying network resources..."
+          az deployment sub create \
+            --name "${{ parameters.subscriptionName }}-network-$(Build.BuildNumber)" \
+            --location "${{ parameters.location }}" \
+            --template-file "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/main.network.bicep" \
+            --parameters "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/network/network.basic.east.parameters.json" \
+            --parameters loc="${{ parameters.location }}" \
+            --subscription "${{ parameters.subscriptionId }}"
+
+  # Deploy monitor resources if enabled
+  - ${{ if eq(parameters.deployComponents.monitor, true) }}:
+    - task: AzureCLI@2
+      displayName: "Deploy Monitoring Resources"
+      inputs:
+        azureSubscription: '${{ parameters.serviceConnectionId }}'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Deploying monitoring resources..."
+          az deployment sub create \
+            --name "${{ parameters.subscriptionName }}-monitor-$(Build.BuildNumber)" \
+            --location "${{ parameters.location }}" \
+            --template-file "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/main.monitor.bicep" \
+            --parameters "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/monitor/east.parameters.json" \
+            --parameters loc="${{ parameters.location }}" \
+            --subscription "${{ parameters.subscriptionId }}"
+
+  # Deploy backup resources if enabled
+  - ${{ if eq(parameters.deployComponents.backup, true) }}:
+    - task: AzureCLI@2
+      displayName: "Deploy Backup Resources"
+      inputs:
+        azureSubscription: '${{ parameters.serviceConnectionId }}'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Deploying backup resources..."
+          az deployment sub create \
+            --name "${{ parameters.subscriptionName }}-backup-$(Build.BuildNumber)" \
+            --location "${{ parameters.location }}" \
+            --template-file "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/main.backup.bicep" \
+            --parameters "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/backup/east.parameters.json" \
+            --parameters loc="${{ parameters.location }}" \
+            --subscription "${{ parameters.subscriptionId }}"
+  
+  # Deploy recovery resources if enabled
+  - ${{ if eq(parameters.deployComponents.recovery, true) }}:
+    - task: AzureCLI@2
+      displayName: "Deploy Recovery Resources"
+      inputs:
+        azureSubscription: '${{ parameters.serviceConnectionId }}'
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        inlineScript: |
+          echo "Deploying recovery resources..."
+          az deployment sub create \
+            --name "${{ parameters.subscriptionName }}-recovery-$(Build.BuildNumber)" \
+            --location "${{ parameters.location }}" \
+            --template-file "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/main.recovery.bicep" \
+            --parameters "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/recovery/east.parameters.json" \
+            --parameters loc="${{ parameters.location }}" \
+            --subscription "${{ parameters.subscriptionId }}"
+
+  # Deploy Container Apps if enabled
+  - ${{ if eq(parameters.deployComponents.containerApps, true) }}:
+    - task: AzurePowerShell@5
+      displayName: "Deploy Container Apps"
+      inputs:
+        azureSubscription: '${{ parameters.serviceConnectionId }}'
+        ScriptType: 'InlineScript'
+        Inline: |
+          Write-Host "Deploying Container Apps..."
+          New-AzResourceGroupDeployment `
+            -ResourceGroupName "${{ parameters.subscriptionName }}-dev-ciam-central-rg" `
+            -TemplateFile "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/containerApps.bicep" `
+            -TemplateParameterFile "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/containerApps.east.parameters.json" `
+            -Verbose
+        azurePowerShellVersion: 'LatestVersion'
+        pwsh: true
+
+  # Deploy SQL Server if enabled
+  - ${{ if eq(parameters.deployComponents.sqlServer, true) }}:
+    - task: AzurePowerShell@5
+      displayName: "Deploy SQL Server"
+      inputs:
+        azureSubscription: '${{ parameters.serviceConnectionId }}'
+        ScriptType: 'InlineScript'
+        Inline: |
+          Write-Host "Deploying SQL Server..."
+          New-AzResourceGroupDeployment `
+            -ResourceGroupName "${{ parameters.subscriptionName }}-dev-ciam-central-rg" `
+            -TemplateFile "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/sqlServer.bicep" `
+            -TemplateParameterFile "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/sqlServer.east.parameters.json" `
+            -Verbose
+        azurePowerShellVersion: 'LatestVersion'
+        pwsh: true
+
+  # Deploy NSG if enabled
+  - ${{ if eq(parameters.deployComponents.nsg, true) }}:
+    - task: AzurePowerShell@5
+      displayName: "Deploy NSG"
+      inputs:
+        azureSubscription: '${{ parameters.serviceConnectionId }}'
+        ScriptType: 'InlineScript'
+        Inline: |
+          Write-Host "Deploying NSG..."
+          New-AzResourceGroupDeployment `
+            -ResourceGroupName "${{ parameters.subscriptionName }}-dev-ciam-central-rg" `
+            -TemplateFile "$(System.DefaultWorkingDirectory)/InfraDeployment POC/azresources/modules/nsg.bicep" `
+            -TemplateParameterFile "$(System.DefaultWorkingDirectory)/InfraDeployment POC/config/${{ parameters.subscriptionName }}/nsg.east.parameters.json" `
+            -Verbose
+        azurePowerShellVersion: 'LatestVersion'
+        pwsh: true

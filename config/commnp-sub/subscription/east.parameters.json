@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "subscriptionTags": {
+      "value": {
+        "Environment": "Non-Production",
+        "Department": "IT"
+      }
+    },
+    "subscriptionRoleAssignments": {
+      "value": [
+        {
+          "comments": "Built-in Role: Contributor (rbac-commnp-sub-contributor)",
+          "roleDefinitionId": "b24988ac-6180-42a0-ab88-20f7382dd24c",
+          "securityGroupObjectIds": [
+            "b124406e-9e3e-49e8-a008-72a317960fc9"
+          ]
+        }
+      ]
+    }
+  }
+}

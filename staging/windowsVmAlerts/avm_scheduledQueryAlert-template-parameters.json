@@ -1,0 +1,58 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "alertName": {
+            "value": ""
+        },
+        "alertCriteria": {
+            "value": {
+
+            }
+        }, 
+        "alertActions": {
+            "value": []
+        }, 
+        "alertDescription": {
+            "value": "Description"
+        },
+        "alertDisplayName": {
+            "value": "alert display name"
+        },
+        "autoMitigate": {
+            "value": true
+        },
+        "isEnabled": {
+            "value": true
+        },
+        "alertEvalFrequency": {
+            "value": ""
+        },
+        "alertKind": {  
+            "value": ""
+        },
+        "alertLocation": {
+            "value": "global"
+        }, 
+        "alertQueryTimeRange": {
+            "value": ""
+        },
+        "roleAssignmentsList": {
+            "value": []
+        },
+        "ruleResolvedConfiguration": {
+            "value": {
+                
+            }
+        },
+        "alertSeverity": {
+            "value": 0
+        },
+        "skipQueryValidation": {
+            "value": ""
+        }, 
+        "suppresForMinutes": {
+            "value": "" 
+        }
+    }
+}

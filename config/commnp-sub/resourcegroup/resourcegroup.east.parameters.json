@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "loc": {
+      "value": "cus"
+    },
+    "workloads": {
+      "value": {
+        "resourceGroups": [
+          {
+            "name": "ddrweb",
+            "tags": {
+              "Criticality": "Non-Production",
+              "ServiceClass": "Non-Production",
+              "WorkloadName": "Application Workload"
+            }
+          },
+          {
+            "name": "ddr",
+            "tags": {
+              "Criticality": "Non-Production",
+              "ServiceClass": "Non-Production",
+              "WorkloadName": "Data Storage"
+            }
+          }
+        ],
+        "deployNetworkWatcherRG": false,
+        "tags": {
+          "Environment": "Non-Production",
+          "Department": "IT"
+        }
+      }
+    }
+  }
+}

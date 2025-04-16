@@ -1,0 +1,33 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "managedEnvironments_name": {
+            "value": "pci-tst-cus-ncp-web-cae"
+        },
+        "location": {
+            "value": "Central US"
+        },
+        "tags": {
+            "value": {
+                "Environment": "Testing",
+                "Diagnostics": "true",
+                "DateCreated": "01/22/2025",
+                "ReviewDate": "01/22/2026",
+                "Creator": "Lesere, azadm, azadm.lesere@flyfrontier.onmicrosoft.com"
+            }
+        },
+        "vnetConfiguration": {
+            "value": {
+                "internal": true,
+                "infrastructureSubnetId": "/subscriptions/31e73e1a-7952-45fe-8e41-8a1316446905/resourceGroups/f9pcitstcusnetrg/providers/Microsoft.Network/virtualNetworks/f9pcitstcusinternalvnet/subnets/pci-tst-cus-ncp-web-snet"
+            }
+        },
+        "logAnalyticsConfiguration": {
+            "value": {
+                "customerId": "6c0fbee3-1576-4c19-926e-098fa9070cba",
+                "dynamicJsonColumns": false
+            }
+        }
+    }
+} 

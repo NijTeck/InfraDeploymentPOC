@@ -1,0 +1,87 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "alertName": {
+            "value": "OS Disk Free Space Warning"
+        },
+        "alertCriteria": {
+            "value": {
+                "allOf": [
+                        {
+                            "query": "InsightsMetrics\r\n| where Origin == \"vm.azm.ms\"\r\n| where Namespace == \"LogicalDisk\"and Name == \"FreeSpaceMB\"\r\n| extend Disk=tostring(todynamic(Tags)[\"vm.azm.ms/mountId\"])\r\n| where Disk in ('C:','/')\r\n| summarize AggregatedValue = min(Val) by bin(TimeGenerated, 15m), Computer, _ResourceId, Disk\r\n| where AggregatedValue < 30720",
+                            "timeAggregation": "Average",
+                            "metricMeasureColumn": "AggregatedValue",
+                            "dimensions": [
+                                {
+                                    "name": "Computer",
+                                    "operator": "Include",
+                                    "values": [
+                                        "*"
+                                    ]
+                                },
+                                {
+                                    "name": "Disk",
+                                    "operator": "Include",
+                                    "values": [
+                                        "*"
+                                    ] 
+                                }
+                            ],
+                            "resourceIdColumn": "_ResourceId",
+                            "operator": "LessThan",
+                            "threshold": 30720,
+                            "failingPeriods": {
+                                "numberOfEvaluationPeriods": 1,
+                                "minFailingPeriodsToAlert": 1
+                            }
+                        }
+                    ]
+            }
+        }, 
+        "alertActions": {
+            "value": []
+        }, 
+        "alertDescription": {
+            "value": "Log query alert for virtual machine OS disk free space. This alert will trigger when the OS disk falls below 30GB remaining space available."
+        },
+        "alertDisplayName": {
+            "value": "OS Disk Free Space Warning"
+        },
+        "autoMitigate": {
+            "value": true
+        },
+        "isEnabled": {
+            "value": true
+        },
+        "alertEvalFrequency": {
+            "value": "PT5M"
+        },
+        "alertKind": {  
+            "value": "LogAlert"
+        },
+        "alertLocation": {
+            "value": "centralus"
+        }, 
+        "roleAssignmentsList": {
+            "value": []
+        },
+        "ruleResolvedConfiguration": {
+            "value": {}
+        },
+        "alertSeverity": {
+            "value": 2
+        },
+        "skipQueryValidation": {
+            "value": false
+        },
+        "alertWindowSize": {
+            "value": "PT15M"
+        }, 
+        "scopes": {
+            "value": [
+                "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxx"
+            ]
+        }
+    }
+}

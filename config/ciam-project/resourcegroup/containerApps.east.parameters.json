@@ -1,0 +1,280 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "value": "centralus"
+        },
+        "environment": {
+            "value": "dev"
+        },
+        "virtualNetworkId": {
+            "value": "/subscriptions/921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674/resourceGroups/commnp-sub-centralus-vnet-rg/providers/Microsoft.Network/virtualNetworks/commnp-sub-centralus-vnet"
+        },
+        "subnetName": {
+            "value": "dev-cae-snet"
+        },
+        "managedEnvironmentId": {
+            "value": "dev-ciam-cae"
+        },
+        "sqlServerName": {
+            "value": "dev-ciam-sql"
+        },
+        "storageAccountName": {
+            "value": "devciamst"
+        },
+        "tags": {
+            "value": {
+                "Environment": "Non-Production",
+                "Department": "IT",
+                "Criticality": "4",
+                "ServiceClass": "Non-Production",
+                "WorkloadName": "ncp-ciam",
+                "DateCreated": "01/22/2025",
+                "Creator": "Lesere, azadm, azadm.lesere@flyfrontier.onmicrosoft.com",
+                "ReviewDate": "01/22/2026",
+                "Diagnostics": "true"
+            }
+        },
+        "containerApps": {
+            "value": [
+                {
+                    "name": "dev-ciam-corpsiteweb",
+                    "image": "pcitstcusncpcr.azurecr.io/corpsiteweb:latest",
+                    "daprAppId": "corpsite-web",
+                    "configuration": {
+                        "secrets": [
+                            {
+                                "name": "container-registry-password"
+                            }
+                        ],
+                        "activeRevisionsMode": "Single",
+                        "ingress": {
+                            "external": true,
+                            "targetPort": 8080,
+                            "transport": "Auto",
+                            "allowInsecure": false
+                        },
+                        "registries": [
+                            {
+                                "server": "pcitstcusncpcr.azurecr.io",
+                                "username": "pcitstcusncpcr",
+                                "passwordSecretRef": "container-registry-password"
+                            }
+                        ],
+                        "dapr": {
+                            "enabled": true,
+                            "appId": "corpsite-web",
+                            "appProtocol": "http",
+                            "logLevel": "debug",
+                            "enableApiLogging": true
+                        }
+                    },
+                    "template": {
+                        "containers": [
+                            {
+                                "name": "dev-ciam-corpsiteweb",
+                                "image": "pcitstcusncpcr.azurecr.io/corpsiteweb:latest",
+                                "env": [
+                                    {
+                                        "name": "AZP_URL",
+                                        "value": "https://dev.azure.com/flyfrontier"
+                                    },
+                                    {
+                                        "name": "environment",
+                                        "value": "dev"
+                                    }
+                                ],
+                                "resources": {
+                                    "cpu": 0.5,
+                                    "memory": "1Gi"
+                                }
+                            }
+                        ],
+                        "scale": {
+                            "minReplicas": 1,
+                            "maxReplicas": 1
+                        }
+                    }
+                },
+                {
+                    "name": "dev-ciam-identityweb",
+                    "image": "pcitstcusncpcr.azurecr.io/identityweb:latest",
+                    "daprAppId": "identity-web",
+                    "configuration": {
+                        "secrets": [
+                            {
+                                "name": "container-registry-password"
+                            }
+                        ],
+                        "activeRevisionsMode": "Single",
+                        "ingress": {
+                            "external": true,
+                            "targetPort": 8080,
+                            "transport": "Auto",
+                            "allowInsecure": true
+                        },
+                        "registries": [
+                            {
+                                "server": "pcitstcusncpcr.azurecr.io",
+                                "username": "pcitstcusncpcr",
+                                "passwordSecretRef": "container-registry-password"
+                            }
+                        ],
+                        "dapr": {
+                            "enabled": true,
+                            "appId": "identity-web",
+                            "appProtocol": "http",
+                            "logLevel": "debug",
+                            "enableApiLogging": true
+                        }
+                    },
+                    "template": {
+                        "containers": [
+                            {
+                                "name": "dev-ciam-identityweb",
+                                "image": "pcitstcusncpcr.azurecr.io/identityweb:latest",
+                                "env": [
+                                    {
+                                        "name": "AZP_URL",
+                                        "value": "https://dev.azure.com/flyfrontier"
+                                    },
+                                    {
+                                        "name": "environment",
+                                        "value": "dev"
+                                    }
+                                ],
+                                "resources": {
+                                    "cpu": 0.5,
+                                    "memory": "1Gi"
+                                }
+                            }
+                        ],
+                        "scale": {
+                            "minReplicas": 1,
+                            "maxReplicas": 1
+                        }
+                    }
+                },
+                {
+                    "name": "dev-ciam-flyfrontierweb",
+                    "image": "pcitstcusncpcr.azurecr.io/flyfrontierweb:latest",
+                    "daprAppId": "flyfrontier-web",
+                    "configuration": {
+                        "secrets": [
+                            {
+                                "name": "container-registry-password"
+                            }
+                        ],
+                        "activeRevisionsMode": "Single",
+                        "ingress": {
+                            "external": true,
+                            "targetPort": 8080,
+                            "transport": "Auto",
+                            "allowInsecure": false
+                        },
+                        "registries": [
+                            {
+                                "server": "pcitstcusncpcr.azurecr.io",
+                                "username": "pcitstcusncpcr",
+                                "passwordSecretRef": "container-registry-password"
+                            }
+                        ],
+                        "dapr": {
+                            "enabled": true,
+                            "appId": "flyfrontier-web",
+                            "appProtocol": "http",
+                            "logLevel": "debug",
+                            "enableApiLogging": true
+                        }
+                    },
+                    "template": {
+                        "containers": [
+                            {
+                                "name": "dev-ciam-flyfrontierweb",
+                                "image": "pcitstcusncpcr.azurecr.io/flyfrontierweb:latest",
+                                "env": [
+                                    {
+                                        "name": "AZP_URL",
+                                        "value": "https://dev.azure.com/flyfrontier"
+                                    },
+                                    {
+                                        "name": "environment",
+                                        "value": "dev"
+                                    }
+                                ],
+                                "resources": {
+                                    "cpu": 0.5,
+                                    "memory": "1Gi"
+                                }
+                            }
+                        ],
+                        "scale": {
+                            "minReplicas": 1,
+                            "maxReplicas": 1
+                        }
+                    }
+                },
+                {
+                    "name": "dev-ciam-identityadminweb",
+                    "image": "pcitstcusncpcr.azurecr.io/identityadminweb:latest",
+                    "daprAppId": "identityadmin-web",
+                    "configuration": {
+                        "secrets": [
+                            {
+                                "name": "container-registry-password"
+                            }
+                        ],
+                        "activeRevisionsMode": "Single",
+                        "ingress": {
+                            "external": true,
+                            "targetPort": 8080,
+                            "transport": "Auto",
+                            "allowInsecure": false
+                        },
+                        "registries": [
+                            {
+                                "server": "pcitstcusncpcr.azurecr.io",
+                                "username": "pcitstcusncpcr",
+                                "passwordSecretRef": "container-registry-password"
+                            }
+                        ],
+                        "dapr": {
+                            "enabled": true,
+                            "appId": "identityadmin-web",
+                            "appProtocol": "http",
+                            "logLevel": "debug",
+                            "enableApiLogging": true
+                        }
+                    },
+                    "template": {
+                        "containers": [
+                            {
+                                "name": "dev-ciam-identityadminweb",
+                                "image": "pcitstcusncpcr.azurecr.io/identityadminweb:latest",
+                                "env": [
+                                    {
+                                        "name": "AZP_URL",
+                                        "value": "https://dev.azure.com/flyfrontier"
+                                    },
+                                    {
+                                        "name": "environment",
+                                        "value": "dev"
+                                    }
+                                ],
+                                "resources": {
+                                    "cpu": 0.5,
+                                    "memory": "1Gi"
+                                }
+                            }
+                        ],
+                        "scale": {
+                            "minReplicas": 1,
+                            "maxReplicas": 1
+                        }
+                    }
+                }
+            ]
+        }
+    }
+} 

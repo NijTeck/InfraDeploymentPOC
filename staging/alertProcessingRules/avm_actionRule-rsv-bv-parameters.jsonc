@@ -1,0 +1,46 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "aprName": {
+            "value": "Recovery Services and Backup Vault Errors"
+        },
+        "aprActions": {
+            "value": [
+                {
+                    "actionGroupIds": [
+                        "/subscriptions/1f23b7b8-6752-4a31-9573-4d85277c2101/resourceGroups/f9infra-management-monitor-east-rg/providers/Microsoft.Insights/actiongroups/f9infra-management-big-panda-relay"
+                    ],
+                    "actionType": "AddActionGroups"
+                }
+            ]
+        },
+        "aprDescription": {
+            "value": "Alert processing rule for all errors related to recovery services vaults and backup vaults."
+        },
+        "aprConditions": {
+            "value": [
+                {
+                    "field": "TargetResourceType",
+                    "operator": "Equals",
+                    "values": [
+                        "microsoft.recoveryservices/vaults",
+                        "microsoft.dataprotection/backupvaults"
+                    ]
+                }
+            ]
+        },
+        "isEnabled": {
+            "value": true
+        },
+        "location": {
+            "value": "global"
+        },
+        "roleAssignmentsList": {
+            "value": []
+        },
+        "schedule":{
+            "value": {}
+        }
+    }
+}

@@ -1,0 +1,80 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "alertName": {
+            "value": "VM Heartbeat"
+        },
+        "alertCriteria": {
+            "value": {
+                "allOf": [
+                        {
+                            "query": "Heartbeat\r\n| summarize TimeGenerated=max(TimeGenerated) by Computer, _ResourceId\r\n| extend Duration = datetime_diff('minute',now(),TimeGenerated)\r\n| summarize AggregatedValue = min(Duration) by Computer, bin(TimeGenerated,5m), _ResourceId\r\n",
+                            "timeAggregation": "Average",
+                            "metricMeasureColumn": "AggregatedValue",
+                            "dimensions": [
+                                {
+                                    "name": "Computer",
+                                    "operator": "Include",
+                                    "values": [
+                                        "*"
+                                    ]
+                                }
+                            ],
+                            "resourceIdColumn": "_ResourceId",
+                            "operator": "GreaterThan",
+                            "threshold": 10,
+                            "failingPeriods": {
+                                "numberOfEvaluationPeriods": 1,
+                                "minFailingPeriodsToAlert": 1
+                            }
+                        }
+                    ]
+            }
+        }, 
+        "alertActions": {
+            "value": []
+        }, 
+        "alertDescription": {
+            "value": "Log query alert for virtual machine heartbeat. This is specific to the AMA agent functioning as expected."
+        },
+        "alertDisplayName": {
+            "value": "VM Heartbeat"
+        },
+        "autoMitigate": {
+            "value": true
+        },
+        "isEnabled": {
+            "value": true
+        },
+        "alertEvalFrequency": {
+            "value": "PT5M"
+        },
+        "alertKind": {  
+            "value": "LogAlert"
+        },
+        "alertLocation": {
+            "value": "centralus"
+        }, 
+        "roleAssignmentsList": {
+            "value": []
+        },
+        "ruleResolvedConfiguration": {
+            "value": {}
+        },
+        "alertSeverity": {
+            "value": 1
+        },
+        "skipQueryValidation": {
+            "value": false
+        },
+        "alertWindowSize": {
+            "value": "PT15M"
+        }, 
+        "scopes": {
+            "value": [
+                "/subscriptions/xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxx"
+            ]
+        }
+    }
+}

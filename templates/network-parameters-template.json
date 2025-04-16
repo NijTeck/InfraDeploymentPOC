@@ -1,0 +1,121 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "loc": {
+        "value": "cus"
+      },
+      "network": {
+        "value": {
+          "deployVnet": true,
+          "zone": "[SUBSCRIPTION_ZONE]", 
+          "addressPrefixes": [
+            "[CIDR_BLOCK]"  
+          ],
+          "dnsServers": [
+            "10.70.70.4",
+            "10.70.70.5",
+            "168.63.129.16",
+            "10.70.1.4"
+          ],
+          "name": "spoke-vnet",
+          "lock": {
+            "kind": "CanNotDelete",
+            "name": "Virtual Network Resource lock"
+          },
+          "peering": {
+            "enabled": true,
+            "spokesubid": "[SUBSCRIPTION_ID]",
+            "transitrg": "network-vwan-hub-rg",
+            "transitsubid": "daed0036-c29a-4894-806b-33313ce245db"
+          },
+          "deployNetworkWatcherRG": false,
+          "resourceGroupTags": {
+            "ServiceClass": "[SERVICE_CLASS]", 
+            "Compliance": "PCI",
+            "ManagedBy": "IaC"
+          },
+          "subnets": [
+            {
+              "comments": "frontend-snet for compute resources",
+              "name": "frontend-snet",
+              "addressPrefix": "[FRONTEND_SUBNET]", 
+              "delegation": {
+                "enabled": false
+              },
+              "nsg": {
+                "enabled": true
+              },
+              "privateEndpointNetworkPolicies": "Enabled",
+              "udr": {
+                "enabled": true,
+                "disableBgpRoutePropagation": false,
+                "routes": [
+                  {
+                    "name": "default",
+                    "properties": {
+                      "addressPrefix": "0.0.0.0/0",
+                      "hasBgpOverride": false,
+                      "nextHopType": "VirtualNetworkGateway"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "comments": "backend-snet",
+              "name": "backend-snet",
+              "addressPrefix": "[BACKEND_SUBNET]", 
+              "delegation": {
+                "enabled": false
+              },
+              "nsg": {
+                "enabled": true
+              },
+              "privateEndpointNetworkPolicies": "Enabled",
+              "udr": {
+                "enabled": true,
+                "disableBgpRoutePropagation": false,
+                "routes": [
+                  {
+                    "name": "default",
+                    "properties": {
+                      "addressPrefix": "0.0.0.0/0",
+                      "hasBgpOverride": false,
+                      "nextHopType": "VirtualNetworkGateway"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "comments": "pe-snet for private endpoints",
+              "name": "pe-snet",
+              "addressPrefix": "[PE_SUBNET]",  
+              "delegation": {
+                "enabled": false
+              },
+              "nsg": {
+                "enabled": true
+              },
+              "privateEndpointNetworkPolicies": "Enabled",
+              "udr": {
+                "enabled": true,
+                "disableBgpRoutePropagation": false,
+                "routes": [
+                  {
+                    "name": "default",
+                    "properties": {
+                      "addressPrefix": "0.0.0.0/0",
+                      "hasBgpOverride": false,
+                      "nextHopType": "VirtualNetworkGateway"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }

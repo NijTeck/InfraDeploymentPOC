@@ -1,0 +1,71 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "aprName": {
+            "value": "<Processing rule name>"   // provide a display name for the action rule
+        },
+        "aprActions": {
+            "value": [
+                {
+                    "actionGroupIds": [
+                        "<Azure resource IDs for action groups>"    // this resource does not need to be within the same subscription
+                    ],
+                    "actionType": "<AddActionGroups | RemoveAllActionGroups>"  // define the action of the processing rule between the two options
+                }
+            ]
+        },
+        "aprDescription": {
+            "value": "<Description>"
+        },
+        "aprConditions": {
+            "value": [
+                {
+                    "field": "Severity",    // sample values, there are many arguments that can be used here. this example is triggering based on critical, error, and warning severity alerts.
+                    "operator": "Equals",
+                    "values": [
+                        "Sev0",
+                        "Sev1",
+                        "Sev2"
+                    ]
+                }
+            ]
+        },
+        "isEnabled": {
+            "value": true
+        },
+        "location": {
+            "value": "global"
+        },
+        "roleAssignmentsList": {
+            "value": []
+        },
+        "schedule": {   
+            "value": {
+                "effectiveFrom": "2024-10-30T00:00:00", // sample schedule structure
+                "timeZone": "Mountain Time",
+                "recurrences": [
+                    {
+                        "daysOfWeek": [
+                            "Monday",
+                            "Tuesday",
+                            "Wednesday",
+                            "Thursday",
+                            "Friday"
+                        ],
+                        "recurrenceType": "Weekly",
+                        "startTime": "20:00:00",
+                        "endTime": "08:00:00"
+                    },
+                    {
+                        "daysOfWeek": [
+                            "Saturday",
+                            "Sunday"
+                        ],
+                        "recurrenceType": "Weekly"
+                    }
+                ]
+            }
+        }
+    }
+}

@@ -1,0 +1,345 @@
+# Input bindings are passed in via param block.
+param($Timer)
+
+# Get the current universal time in the default string format.
+$currentUTCtime = (Get-Date).ToUniversalTime()
+
+# The 'IsPastDue' property is 'true' when the current function invocation is later than scheduled.
+if ($Timer.IsPastDue) {
+    Write-Host "PowerShell timer is running late!"
+}
+
+# Write an information log with the current time.
+Write-Host "PowerShell timer trigger function ran! TIME: $currentUTCtime"
+
+<#
+    Module Requirements
+        Az
+            - Accounts          (get Subs and Set Context)
+            - Compute           (Get VM's)
+            - RecoveryServices  (Backup Operations)
+            - Resources         (Update Tags on Targeted Machines)
+            - Storage           (Work with Blob Storage for CSV Summary Update)
+#>
+
+<#   Managed Identity Requirements
+        - Reader on full scope
+            - Read subs, vms, and rsv's
+        - Backup Operater on full scope
+            - Enable Backups on VM's (least privileged)
+        - Virtual Machine Contributor on full scope
+            - Enable Backups on VM's (least privileged)
+#>
+
+
+
+Write-Output 'Import Modules'
+
+Import-Module Az.RecoveryServices
+Import-Module Az.Compute
+Import-Module Az.Accounts
+Import-Module Az.Resources
+Import-Module Az.Storage
+
+# $connectionstring = $Env:APPLICATIONINSIGHTS_CONNECTION_STRING
+$client = [Microsoft.ApplicationInsights.TelemetryClient]::new()
+# $client.ConnectionString = $connectionstring
+# $EndpointAddress = "https://dc.services.visualstudio.com/v2/track";
+
+# $InstrumentationKey = '33e8db34-ed40-4173-b24b-8c25a504e385'
+# $Channel = [Microsoft.ApplicationInsights.Channel.InMemoryChannel]::new();
+# $Channel.EndpointAddress = $EndpointAddress;
+# $TelemetryConfiguration = [Microsoft.ApplicationInsights.Extensibility.TelemetryConfiguration]::new(
+#     $InstrumentationKey,
+#     $Channel
+# );
+# $client = [Microsoft.ApplicationInsights.TelemetryClient]::new($TelemetryConfiguration);
+
+
+$client.InstrumentationKey = '33e8db34-ed40-4173-b24b-8c25a504e385'
+$client.Context.User.Id = $Env:UserName
+$client.Context.Session.Id = $PID
+
+
+$subscriptions = Get-AzSubscription
+
+Write-Output 'Gather subscriptions:' $subscriptions
+
+$BackupSuccess = 0
+$BackupFailure = 0
+
+$BackupVMSuccess = @()
+$BackupVMFailure = @()
+
+$BackupSummary = @()
+$SkipSubscriptions = @(
+#    "b4d714fa-a345-4251-a76c-3b91e9ec84b1",
+#    "c85af8a5-c6bd-4189-89fd-244034444580"
+)
+foreach ($subscription in $subscriptions) {
+    if ($SkipSubscriptions -contains $subscription.id){
+        Write-Output "Skipping subscription: [$($subscription.name)]"
+        continue
+    }
+    Set-AzContext -SubscriptionId $subscription.Id
+
+    $notBackedUpVMs = @()
+    $backedUpVMs = @()
+
+    $vms = Get-AzVm
+
+    foreach ($vm in $vms) {
+        $vmId = $vm.Id
+        $vmName = $vm.Name
+        $vmResourceGroup = $vm.ResourceGroupName
+        $vmLocation = $vm.Location
+        $vmTags = $vm.Tags
+
+        # Check if the VM is being backed up
+        $backupItem = Get-AzRecoveryServicesBackupStatus -Name $vmName -ResourceGroupName $vmResourceGroup -Type AzureVM
+
+        if ($backupItem.BackedUp) {
+            # VM is being backed up
+
+            $backedUpVMs += [PSCustomObject]@{
+                Name = $vmName
+                ResourceGroup = $vmResourceGroup
+                Location = $vmLocation
+                Tags = $vmTags
+                SubscriptionId = $subscription.Id
+            }
+        } else {
+            # VM is not being backed up
+
+            $notBackedUpVMs += [PSCustomObject]@{
+                Name = $vmName
+                ResourceGroup = $vmResourceGroup
+                Location = $vmLocation
+                Tags = $vmTags
+                SubscriptionId = $subscription.Id
+            }
+        }
+    }
+    Write-Output "***"
+    Write-Output "There is $($notBackedUpVMs.Count) not backed up VM's in subscription [$($subscription.name)]"
+    Write-Output "***"
+
+    if($notBackedUpVMs){
+
+        foreach($vm in $notbackedUpVMs) {
+
+            $backupOption = $null
+            $backupOption = $vm.Tags["NoBackup"]
+
+            if($backupOption){
+                Write-Output "The virtual machine [$($vm.name)] is exempt from backup policy assignment via it's Backup Option Tag."
+                continue
+            }
+
+            $vault          = $null
+            $criticality    = $null
+            $location       = $null
+            $policies       = $null
+            $randomPolicy   = $null
+
+            $backupOption = $vm.Tags["NoBackup"]
+            $criticality = $vm.Tags["Criticality"]
+            $subscriptionId = $vm.SubscriptionId
+            $location = $vm.Location
+
+
+            # NOTE: This script assumes only one vault in each subscription that contains these strings (-grs-, -zrs-, -lrs-)
+
+            Switch ($criticality) {
+                "Mission-Critical"
+                {
+                    $vault = Get-AzRecoveryServicesVault | Where-Object { $_.Location -eq $location -and $_.Name -like "*-grs-*" }
+                    continue
+                }
+                "Business-Critical"
+                {
+                    $vault = Get-AzRecoveryServicesVault | Where-Object { $_.Location -eq $location -and $_.Name -like "*-zrs-*" }
+                    continue
+                }
+                "Production"
+                {
+                    $vault = Get-AzRecoveryServicesVault | Where-Object { $_.Location -eq $location -and $_.Name -like "*-lrs-*" }
+                    continue
+                }
+                "Non-Critical"
+                {
+                    $vault = Get-AzRecoveryServicesVault | Where-Object { $_.Location -eq $location -and $_.Name -like "*-lrs-*" }
+                    continue
+                }
+                "Non-Production"
+                {
+                    $vault = Get-AzRecoveryServicesVault | Where-Object { $_.Location -eq $location -and $_.Name -like "*-lrs-*" }
+                    continue
+                }
+                default
+                {
+                    try{
+                        throw "FAILURE: Criticality Tag misconfigured or missing for vm [$($vm.name)]. Recieved value is [$($criticality)], Accepted values are [Mission-Critical, Business-Critical, Production, Non-Production, Non-Critical]"
+                    }catch [System.Exception]{
+
+                    # Criticality does not match any desired output:
+                    Write-Output "Criticality Tag misconfigured or missing for vm [$($vm.name)]. Recieved value is [$($criticality)], Accepted values are [Mission-Critical, Business-Critical, Production, Non-Production, Non-Critical]"
+                    Write-Output "Attempting to assign machine to catch-all 'Production' backup policy"
+                    # Attempt to assign to lrs vault to engage the catch all policy below going to the 'Production' policy
+                    $vault = Get-AzRecoveryServicesVault | Where-Object { $_.Location -eq $location -and $_.Name -like "*-lrs-*" }
+
+                    # Clear the $criticality variable to ensure the catch all for missing or misconfigured criticality is actioned
+                    $criticality = 'Production'
+
+                    }
+                    continue
+                }
+            }
+            if ($vault -and $criticality)
+            {
+                # If appropriate policies do not exist aligning with the specified criticalities, the Get-Random function will fail.
+                try
+                {
+                    $policies = Get-AzRecoveryServicesBackupProtectionPolicy -VaultId $vault.id | Where-Object { $_.Name -Like "Vm-$criticality*"}
+                    if ($policies -eq $null) {
+                        throw 'FAILURE: Policy does not exist in vault or has a misconfigured ID'
+                    }
+                    # Select a random policy to allow for the staggered backup start time configuration.
+                    $randomPolicy = Get-Random -InputObject $policies
+
+                    # Associate the VM with the selected policy
+                    Enable-AzRecoveryServicesBackupProtection -ResourceGroupName $vm.ResourceGroup -VaultId $vault.Id -Policy $randomPolicy -Name $vm.Name -WarningAction SilentlyContinue -ErrorAction Stop
+                    Write-Output "SUCCESS: Assigned vm [$($vm.Name)] to policy [$($randomPolicy.Name)] in vault [$($vault.Name)]"
+
+                    $BackupSucess++
+
+                    $BackupVMSuccess += [PSCustomObject]@{
+                        Subscription = $subscription.Name
+                        Name = $vm.Name
+                        Time = (Get-Date).ToString('dd-MM-yyyy-HH:mm:ss')
+                    }
+
+                    $newTag = @{"FunctionTarget"="BackupPolicyAlignment"}
+                    $currentVM = Get-AzVm -Name $vm.Name
+                    Update-AzTag -ResourceId $currentVM.Id -Tag $newTag -Operation Merge
+
+
+                } catch [System.Exception]
+                {
+                    $BackupFailure++
+
+                    $BackupVMFailure += [PSCustomObject]@{
+                        Subscription = $subscription.Name
+                        Name = $vm.Name
+                        Time = (Get-Date).ToString('dd-MM-yyyy-HH:mm:ss')
+                    }
+
+                    $client.TrackException([System.Exception]::new("FAILURE: Error in identifying policies in vault [$($vault.Name)] that align with vm [$($vm.name)]'s criticality [$($criticality)] - Please action appropriate changes to ensure policies are added correctly"))
+                    $client.Flush()
+
+                    Write-Output "FAILURE: Error in identifying policies in vault [$($vault.Name)] that align with vm [$($vm.name)]'s criticality [$($criticality)] - Please action appropriate changes to ensure policies are added correctly"
+
+                }
+            }
+            elseif (!$vault)
+            {
+                try{
+                    throw "FAILURE: Error in Identifying Target Vault for vm [$($vm.Name)]. Please validate there exists correctly configured Recovery Services Vaults in the target subscription [$($subscriptionId)]"
+                }
+                catch [System.Exception]{
+
+                $BackupFailure++
+
+                $BackupVMFailure += [PSCustomObject]@{
+                    Subscription = $subscription.Name
+                    Name = $vm.Name
+                    Time = (Get-Date).ToString('dd-MM-yyyy-HH:mm:ss')
+                }
+
+                $client.TrackException([System.Exception]::new("FAILURE: Error in Identifying Target Vault for vm [$($vm.Name)]. Please validate there exists correctly configured Recovery Services Vaults in the target subscription [$($subscriptionId)]"))
+                $client.Flush()
+
+                Write-Output "FAILURE: Error in Identifying Target Vault for vm [$($vm.Name)]. Please validate there exists correctly configured Recovery Services Vaults in the target subscription [$($subscriptionId)]"
+
+                }
+
+
+            } else
+            {
+                try{
+                    throw "FAILURE: Unknown Error"
+                }
+                catch [System.Exception]{
+
+                $BackupFailure++
+
+                $BackupVMFailure += [PSCustomObject]@{
+                    Subscription = $subscription.Name
+                    Name = $vm.Name
+                    Time = (Get-Date).ToString('dd-MM-yyyy-HH:mm:ss')
+                }
+
+                $client.TrackException([System.Exception]::new("FAILURE: Unknown Error"))
+                $client.Flush()
+
+                Write-Output "FAILURE: Unknown Error"
+
+                }
+            }
+        }
+    }
+}
+
+
+
+Write-Output "There have been [$($BackupSuccess)] Successful Backups triggered by this function run"
+
+Write-Output $BackupVMSuccess
+
+Write-Output "There have been [$($BackupFailure)] Backup Failures encountered by this function run"
+
+Write-Output $BackupVMFailure
+
+$newcontext = new-azstoragecontext -StorageAccountName "infraworkloadsautomb246" -StorageAccountKey "e82l1ufgcH+KHs5TBAz/eCTQ1R+kN9ZYny0Qz9vIRQ6ncWN/sH2eHKwdVMcz//HHpaEpM8e2zMhw+AStmW5Fjw=="
+
+Get-AzStorageBlobContent -Container "backup-status-summary" -Blob "BackupStatusSummary.csv" -Destination "D:\local\Temp\BackupStatusSummary.csv" -Context $newcontext -Force
+
+
+
+
+
+<#
+❯ $newRow = [PSCustomObject]@{
+    'Run Time' = (Get-Date).ToString('dd-MM-yyyy-HH:mm:ss')
+    'Backup Successes' = $BackupSuccess
+    'Backup Failures' = $BackupFailure
+    "VMs Targeted" = $($BackupVMSuccess.Name; $BackupVMFailure.Name)
+}
+#>
+
+$target1 =@()
+$target1 += $BackupVMSuccess.Name
+$target2 =@()
+$target2 += $BackupVMFailure.Name
+
+$target3 = $target1 | ConvertTo-Json
+$target4 = $target2 | ConvertTo-Json
+
+
+$newRow = New-Object PsObject -Property @{
+"Run Time" = (Get-Date).ToString('dd-MM-yyyy-HH:mm:ss') ;
+"Backup Successes" = $BackupSuccess ;
+"Backup Failures" = $BackupFailure ;
+"VM's Targeted Success" = $target3 ;
+"VM's Targeted Failure" = $target4}
+
+#$target = $($BackupVMSuccess.Name; $BackupVMFailure.Name)
+
+$FileContent = @()
+$FileContent = Import-csv "D:\local\Temp\BackupStatusSummary.csv"
+
+[array]$FileContent += $newRow
+
+$FileContent | Export-Csv -Path "D:\local\Temp\BackupStatusSummary.csv" -NoTypeInformation
+
+Set-AzStorageBlobContent -Container "backup-status-summary" -File "D:\local\Temp\BackupStatusSummary.csv" -Blob "BackupStatusSummary.csv" -Context $newcontext -Force

@@ -1,0 +1,52 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "value": "centralus"
+        },
+        "tags": {
+            "value": {
+                "Environment": "Non-Production",
+                "Department": "IT",
+                "Criticality": "4",
+                "ServiceClass": "Non-Production",
+                "WorkloadName": "ncp-ciam"
+            }
+        },
+        "privateEndpoints": {
+            "value": [
+                {
+                    "name": "dev-ciam-sql-pe",
+                    "privateLinkServiceId": "[resourceId(concat('commnp-', 'dev-ciam-', 'central', '-rg'), 'Microsoft.Sql/servers', 'dev-ciam-sql')]",
+                    "groupIds": ["sqlServer"],
+                    "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.database.windows.net')]"
+                },
+                {
+                    "name": "dev-ciam-corpsiteweb-pe",
+                    "privateLinkServiceId": "[resourceId(concat('commnp-', 'dev-ciam-', 'central', '-rg'), 'Microsoft.App/containerApps', 'dev-ciam-corpsiteweb')]",
+                    "groupIds": ["containerApp"],
+                    "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.azurewebsites.net')]"
+                },
+                {
+                    "name": "dev-ciam-identityweb-pe",
+                    "privateLinkServiceId": "[resourceId(concat('commnp-', 'dev-ciam-', 'central', '-rg'), 'Microsoft.App/containerApps', 'dev-ciam-identityweb')]",
+                    "groupIds": ["containerApp"],
+                    "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.azurewebsites.net')]"
+                },
+                {
+                    "name": "dev-ciam-flyfrontierweb-pe",
+                    "privateLinkServiceId": "[resourceId(concat('commnp-', 'dev-ciam-', 'central', '-rg'), 'Microsoft.App/containerApps', 'dev-ciam-flyfrontierweb')]",
+                    "groupIds": ["containerApp"],
+                    "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.azurewebsites.net')]"
+                },
+                {
+                    "name": "dev-ciam-identityadminweb-pe",
+                    "privateLinkServiceId": "[resourceId(concat('commnp-', 'dev-ciam-', 'central', '-rg'), 'Microsoft.App/containerApps', 'dev-ciam-identityadminweb')]",
+                    "groupIds": ["containerApp"],
+                    "privateDnsZoneId": "[resourceId('Microsoft.Network/privateDnsZones', 'privatelink.azurewebsites.net')]"
+                }
+            ]
+        }
+    }
+} 

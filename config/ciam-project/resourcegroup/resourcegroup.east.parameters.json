@@ -1,0 +1,28 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "loc": {
+        "value": "cus"
+      },
+      "workloads": {
+        "value": {
+          "resourceGroups": [
+            {
+              "name": "dev-ciam",
+              "tags": {
+                "Criticality": "4",
+                "ServiceClass": "Non-Production",
+                "WorkloadName": "ncp-ciam"
+              }
+            }
+          ],
+          "deployNetworkWatcherRG": false,
+          "tags": {
+            "Environment": "Non-Production",
+            "Department": "IT"
+          }
+        }
+      }
+    }
+  }

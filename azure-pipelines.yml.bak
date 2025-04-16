@@ -1,0 +1,198 @@
+trigger:
+  branches:
+    include:
+      - master
+  paths:
+    include:
+      - config/**
+
+variables:
+  DEPLOY_FLAG: "YES"
+  WORKING_DIR: $(System.DefaultWorkingDirectory)/azure-mono-deployment
+  LOCATION: "centralus"
+
+pr:
+  branches:
+    include:
+      - master
+  paths:
+    include:
+      - config/**
+
+stages:
+  - stage: DetectChanges
+    displayName: "Detect Changed Configuration Folders"
+    jobs:
+      - job: CheckChangedFolders
+        displayName: "Check for Configuration Changes"
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+
+          - script: |
+              echo "=== Listing changed files ==="
+              git diff --name-only HEAD~1 HEAD
+            displayName: "Debug Git Changes"
+
+          - script: |
+              echo "Detecting changed folders..."
+              CHANGED_FOLDERS=$(git diff --name-only HEAD~1 HEAD | grep '^config/' | awk -F'/' '{print $2}' | sort -u)
+              echo "Changed Folders: $CHANGED_FOLDERS"
+
+              # Initialize deployment flags for all known subscriptions
+              SUBSCRIPTIONS=("commnp-sub" "commprod-sub" "commonplat-prod-sub" "commonplat-np-sub" "opsprod-sub" "opsnp-sub" "analytics-prod-sub" "analytics-np-sub")
+              
+              # Set all deployment flags to false initially
+              for SUB in "${SUBSCRIPTIONS[@]}"; do
+                SUB_VAR=$(echo $SUB | tr '-' '_' | tr 'a-z' 'A-Z')
+                echo "##vso[task.setvariable variable=DEPLOY_${SUB_VAR};]false"
+                echo "##vso[task.setvariable variable=DEPLOY_${SUB_VAR}_OUT;isOutput=true]false"
+              done
+
+              # Set deployment flags to true for changed folders
+              for FOLDER in $CHANGED_FOLDERS; do
+                # Convert folder name to variable name format
+                SUB_VAR=$(echo $FOLDER | tr '-' '_' | tr 'a-z' 'A-Z')
+                
+                # Ensure the folder is a valid subscription folder
+                if [[ " ${SUBSCRIPTIONS[@]} " =~ " ${FOLDER} " ]]; then
+                  echo "Setting deployment flag for $FOLDER"
+                  echo "##vso[task.setvariable variable=DEPLOY_${SUB_VAR};]true"
+                  echo "##vso[task.setvariable variable=DEPLOY_${SUB_VAR}_OUT;isOutput=true]true"
+                fi
+              done
+            name: setVars
+            displayName: "Find Changed Configuration Folders"
+
+          - script: |
+              echo "=== Deployment Variables ==="
+              for SUB in commnp-sub commprod-sub commonplat-prod-sub commonplat-np-sub opsprod-sub opsnp-sub analytics-prod-sub analytics-np-sub; do
+                SUB_VAR=$(echo $SUB | tr '-' '_' | tr 'a-z' 'A-Z')
+                eval "VALUE=\$DEPLOY_${SUB_VAR}"
+                echo "DEPLOY_${SUB_VAR} = ${VALUE}"
+              done
+            displayName: "Debug Deployment Variables"
+
+        # Set outputs for each subscription
+        outputs:
+          COMMNP_SUB: $[ steps.setVars.outputs.DEPLOY_COMMNP_SUB_OUT ]
+          COMMPROD_SUB: $[ steps.setVars.outputs.DEPLOY_COMMPROD_SUB_OUT ]
+          COMMONPLAT_PROD_SUB: $[ steps.setVars.outputs.DEPLOY_COMMONPLAT_PROD_SUB_OUT ]
+          COMMONPLAT_NP_SUB: $[ steps.setVars.outputs.DEPLOY_COMMONPLAT_NP_SUB_OUT ]
+          OPSPROD_SUB: $[ steps.setVars.outputs.DEPLOY_OPSPROD_SUB_OUT ]
+          OPSNP_SUB: $[ steps.setVars.outputs.DEPLOY_OPSNP_SUB_OUT ]
+          ANALYTICS_PROD_SUB: $[ steps.setVars.outputs.DEPLOY_ANALYTICS_PROD_SUB_OUT ]
+          ANALYTICS_NP_SUB: $[ steps.setVars.outputs.DEPLOY_ANALYTICS_NP_SUB_OUT ]
+
+  # Commercial Non-Production Subscription
+  - stage: Deploy_COMMNP
+    displayName: "Deploy Commercial Non-Production"
+    dependsOn: DetectChanges
+    condition: eq(dependencies.DetectChanges.outputs['CheckChangedFolders.COMMNP_SUB'], 'true')
+    jobs:
+      - job: Deploy_COMMNP
+        displayName: "Deploy Commercial Non-Prod Resources"
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          - template: config/commnp-sub/azure-pipelines.yml
+
+  # Commercial Production Subscription
+  - stage: Deploy_COMMPROD
+    displayName: "Deploy Commercial Production"
+    dependsOn: DetectChanges
+    condition: eq(dependencies.DetectChanges.outputs['CheckChangedFolders.COMMPROD_SUB'], 'true')
+    jobs:
+      - job: Deploy_COMMPROD
+        displayName: "Deploy Commercial Prod Resources"
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          - template: config/commprod-sub/azure-pipelines.yml
+
+  # Common Platform Production Subscription
+  - stage: Deploy_COMMONPLAT_PROD
+    displayName: "Deploy Common Platform Production"
+    dependsOn: DetectChanges
+    condition: eq(dependencies.DetectChanges.outputs['CheckChangedFolders.COMMONPLAT_PROD_SUB'], 'true')
+    jobs:
+      - job: Deploy_COMMONPLAT_PROD
+        displayName: "Deploy Common Platform Prod Resources"
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          - template: config/commonplat-prod-sub/azure-pipelines.yml
+
+  # Common Platform Non-Production Subscription
+  - stage: Deploy_COMMONPLAT_NP
+    displayName: "Deploy Common Platform Non-Production"
+    dependsOn: DetectChanges
+    condition: eq(dependencies.DetectChanges.outputs['CheckChangedFolders.COMMONPLAT_NP_SUB'], 'true')
+    jobs:
+      - job: Deploy_COMMONPLAT_NP
+        displayName: "Deploy Common Platform Non-Prod Resources"
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          - template: config/commonplat-np-sub/azure-pipelines.yml
+
+  # Operations Production Subscription
+  - stage: Deploy_OPSPROD
+    displayName: "Deploy Operations Production"
+    dependsOn: DetectChanges
+    condition: eq(dependencies.DetectChanges.outputs['CheckChangedFolders.OPSPROD_SUB'], 'true')
+    jobs:
+      - job: Deploy_OPSPROD
+        displayName: "Deploy Operations Prod Resources"
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          - template: config/opsprod-sub/azure-pipelines.yml
+
+  # Operations Non-Production Subscription
+  - stage: Deploy_OPSNP
+    displayName: "Deploy Operations Non-Production"
+    dependsOn: DetectChanges
+    condition: eq(dependencies.DetectChanges.outputs['CheckChangedFolders.OPSNP_SUB'], 'true')
+    jobs:
+      - job: Deploy_OPSNP
+        displayName: "Deploy Operations Non-Prod Resources"
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          - template: config/opsnp-sub/azure-pipelines.yml
+
+  # Analytics Production Subscription
+  - stage: Deploy_ANALYTICS_PROD
+    displayName: "Deploy Analytics Production"
+    dependsOn: DetectChanges
+    condition: eq(dependencies.DetectChanges.outputs['CheckChangedFolders.ANALYTICS_PROD_SUB'], 'true')
+    jobs:
+      - job: Deploy_ANALYTICS_PROD
+        displayName: "Deploy Analytics Prod Resources"
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          - template: config/analytics-prod-sub/azure-pipelines.yml
+
+  # Analytics Non-Production Subscription
+  - stage: Deploy_ANALYTICS_NP
+    displayName: "Deploy Analytics Non-Production"
+    dependsOn: DetectChanges
+    condition: eq(dependencies.DetectChanges.outputs['CheckChangedFolders.ANALYTICS_NP_SUB'], 'true')
+    jobs:
+      - job: Deploy_ANALYTICS_NP
+        displayName: "Deploy Analytics Non-Prod Resources"
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          - template: config/analytics-np-sub/azure-pipelines.yml
