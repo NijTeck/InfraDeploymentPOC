@@ -2,44 +2,11 @@
     "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
     "contentVersion": "1.0.0.0",
     "parameters": {
-        "storageAccount_name": {
-            "value": "pcidevnewprojectst"
-        },
         "location": {
             "value": "centralus"
         },
         "environment": {
             "value": "dev"
-        },
-        "tags": {
-            "value": {
-                "Environment": "Development",
-                "Department": "IT",
-                "Criticality": "4",
-                "ServiceClass": "Non-Production",
-                "WorkloadName": "new-project",
-                "DateCreated": "04/16/2025",
-                "ReviewDate": "04/16/2026",
-                "Creator": "Azure Admin",
-                "Diagnostics": "true"
-            }
-        },
-        "containers": {
-            "value": [
-                {
-                    "name": "data",
-                    "publicAccess": "None"
-                },
-                {
-                    "name": "logs",
-                    "publicAccess": "None"
-                }
-            ]
-        },
-        "sku": {
-            "value": {
-                "name": "Standard_LRS"
-            }
         }
     }
 } 

@@ -293,15 +293,80 @@ steps:
         ScriptType: 'InlineScript'
         Inline: |
           Write-Host "Deploying Storage Account..."
-          $ResourceGroup = (Get-Content -Path "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/resourcegroup.east.parameters.json" | ConvertFrom-Json).parameters.resourceGroups_name.value
+          # Get the resource group name using the new format where it's in the workloads object
+          $rgParams = Get-Content -Path "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/resourcegroup.east.parameters.json" | ConvertFrom-Json
           
-          $deployParams = @{
-            ResourceGroupName = $ResourceGroup
-            TemplateFile      = "$(System.DefaultWorkingDirectory)/${{ parameters.modulesPath }}/main.storageAccount.bicep"
-            TemplateParameterFile = "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/storageAccount.east.parameters.json"
-            environment       = "${{ parameters.deployComponents.environment }}"
+          # List all resource groups to see what's actually available
+          Write-Host "Checking all resource groups..."
+          $allRGs = Get-AzResourceGroup | Select-Object -ExpandProperty ResourceGroupName
+          Write-Host "Available resource groups: $($allRGs -join ', ')"
+          
+          # Look for resource groups matching our project name pattern
+          $projectPattern = "*new-project*"
+          $matchingRGs = $allRGs | Where-Object { $_ -like $projectPattern }
+          
+          if ($matchingRGs.Count -gt 0) {
+            Write-Host "Found matching resource group(s): $($matchingRGs -join ', ')"
+            # Assign the first match and trim it immediately
+            $ResourceGroup = [string]$matchingRGs[0].Trim()
+            Write-Host "Assigned and Trimmed ResourceGroup: [$ResourceGroup]"
+          } else {
+            # Try the usual patterns as fallback
+            try {
+              if ($rgParams.parameters.resourceGroups_name) {
+                $ResourceGroup = $rgParams.parameters.resourceGroups_name.value
+              } elseif ($rgParams.parameters.workloads -and $rgParams.parameters.workloads.value.resourceGroups) {
+                # Try all possible formats
+                $formats = @(
+                  "${{ parameters.subscriptionName }}-sub-$($rgParams.parameters.workloads.value.resourceGroups[0].name)-$($rgParams.parameters.location.value)-rg",
+                  "${{ parameters.subscriptionName }}-$($rgParams.parameters.workloads.value.resourceGroups[0].name)-$($rgParams.parameters.location.value)-rg",
+                  "${{ parameters.subscriptionName }}-dev-new-project-$($rgParams.parameters.location.value)-rg",
+                  "${{ parameters.subscriptionName }}-sub-pci-dev-new-project-$($rgParams.parameters.location.value)-rg",
+                  "pci-dev-$($rgParams.parameters.loc.value)-new-project-rg"
+                )
+                
+                foreach ($format in $formats) {
+                  Write-Host "Checking resource group format: $format"
+                  if ($allRGs -contains $format) {
+                    $ResourceGroup = $format
+                    Write-Host "Found matching resource group: $ResourceGroup"
+                    break
+                  }
+                }
+                
+                if (-not $ResourceGroup) {
+                  throw "No matching resource group found"
+                }
+              } else {
+                throw "Cannot find resource group name in parameter file"
+              }
+            } catch {
+              throw "Resource group for new-project could not be found. Available groups: $($allRGs -join ', ')"
+            }
           }
           
+          # Ensure ResourceGroup variable is properly set before using it
+          if (-not $ResourceGroup) {
+              throw "ResourceGroup variable is not set after detection logic."
+          }
+
+          # Check the value just before creating deployParams
+          Write-Host "ResourceGroup variable right before deployParams: [$ResourceGroup]"
+
+          $deployParams = @{
+            ResourceGroupName = $ResourceGroup # Use the detected Resource Group Name
+            TemplateFile      = "$(System.DefaultWorkingDirectory)/${{ parameters.modulesPath }}/main.storageAccount.bicep"
+            TemplateParameterFile = "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/storageAccount.east.parameters.json"
+            environment       = "${{ parameters.environment }}" # Corrected environment parameter access
+          }
+
+          # Log the deployParams contents
+          Write-Host "DeployParams content just before deployment:"
+          $deployParams | Format-List | Out-String | Write-Host
+
+          # Double-check the ResourceGroupName parameter within the hashtable
+          Write-Host "ResourceGroupName in deployParams: [$($deployParams.ResourceGroupName)]"
+
           $result = New-AzResourceGroupDeployment @deployParams -ErrorAction Stop
           Write-Host "Storage Account $($result.Outputs.storageAccountName.Value) deployed successfully"
           
@@ -320,8 +385,66 @@ steps:
         ScriptType: 'InlineScript'
         Inline: |
           Write-Host "Deploying SQL Server..."
-          $ResourceGroup = (Get-Content -Path "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/resourcegroup.east.parameters.json" | ConvertFrom-Json).parameters.resourceGroups_name.value
+          # Get the resource group name using the new format where it's in the workloads object
+          $rgParams = Get-Content -Path "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/resourcegroup.east.parameters.json" | ConvertFrom-Json
           
+          # List all resource groups to see what's actually available
+          Write-Host "Checking all resource groups..."
+          $allRGs = Get-AzResourceGroup | Select-Object -ExpandProperty ResourceGroupName
+          Write-Host "Available resource groups: $($allRGs -join ', ')"
+          
+          # Look for resource groups matching our project name pattern
+          $projectPattern = "*new-project*"
+          $matchingRGs = $allRGs | Where-Object { $_ -like $projectPattern }
+          
+          if ($matchingRGs.Count -gt 0) {
+            Write-Host "Found matching resource group(s): $($matchingRGs -join ', ')"
+            # Assign the first match and trim it immediately
+            $ResourceGroup = [string]$matchingRGs[0].Trim()
+            Write-Host "Assigned and Trimmed ResourceGroup: [$ResourceGroup]"
+          } else {
+            # Try the usual patterns as fallback
+            try {
+              if ($rgParams.parameters.resourceGroups_name) {
+                $ResourceGroup = $rgParams.parameters.resourceGroups_name.value
+              } elseif ($rgParams.parameters.workloads -and $rgParams.parameters.workloads.value.resourceGroups) {
+                # Try all possible formats
+                $formats = @(
+                  "${{ parameters.subscriptionName }}-sub-$($rgParams.parameters.workloads.value.resourceGroups[0].name)-$($rgParams.parameters.location.value)-rg",
+                  "${{ parameters.subscriptionName }}-$($rgParams.parameters.workloads.value.resourceGroups[0].name)-$($rgParams.parameters.location.value)-rg",
+                  "${{ parameters.subscriptionName }}-dev-new-project-$($rgParams.parameters.location.value)-rg",
+                  "${{ parameters.subscriptionName }}-sub-pci-dev-new-project-$($rgParams.parameters.location.value)-rg",
+                  "pci-dev-$($rgParams.parameters.loc.value)-new-project-rg"
+                )
+                
+                foreach ($format in $formats) {
+                  Write-Host "Checking resource group format: $format"
+                  if ($allRGs -contains $format) {
+                    $ResourceGroup = $format
+                    Write-Host "Found matching resource group: $ResourceGroup"
+                    break
+                  }
+                }
+                
+                if (-not $ResourceGroup) {
+                  throw "No matching resource group found"
+                }
+              } else {
+                throw "Cannot find resource group name in parameter file"
+              }
+            } catch {
+              throw "Resource group for new-project could not be found. Available groups: $($allRGs -join ', ')"
+            }
+          }
+          
+          # Ensure ResourceGroup variable is properly set before using it
+          if (-not $ResourceGroup) {
+              throw "ResourceGroup variable is not set after detection logic."
+          }
+
+          # Check the value just before processing
+          Write-Host "ResourceGroup variable right before processing: [$ResourceGroup]"
+
           # Get the Virtual Network ID
           $vnet = Get-AzVirtualNetwork -Name "commnp-sub-centralus-vnet" -ResourceGroupName "commnp-sub-centralus-vnet-rg" -ErrorAction SilentlyContinue
           $vnetId = $vnet.Id
@@ -356,6 +479,13 @@ steps:
           if (-not [string]::IsNullOrEmpty($vulnerabilityPath)) {
             $deployParams["vulnerabilityAssessmentsStorageContainerPath"] = $vulnerabilityPath
           }
+
+          # Log the deployParams contents
+          Write-Host "DeployParams content just before deployment (SQL):"
+          $deployParams | Format-List | Out-String | Write-Host
+
+          # Double-check the ResourceGroupName parameter within the hashtable
+          Write-Host "ResourceGroupName in deployParams (SQL): [$($deployParams.ResourceGroupName)]"
           
           $result = New-AzResourceGroupDeployment @deployParams -ErrorAction Stop
           Write-Host "SQL Server $($result.Outputs.sqlServerName.Value) deployed successfully"
@@ -375,8 +505,66 @@ steps:
         ScriptType: 'InlineScript'
         Inline: |
           Write-Host "Deploying Managed Environment for Container Apps..."
-          $ResourceGroup = (Get-Content -Path "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/resourcegroup.east.parameters.json" | ConvertFrom-Json).parameters.resourceGroups_name.value
+          # Get the resource group name using the new format where it's in the workloads object
+          $rgParams = Get-Content -Path "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/resourcegroup.east.parameters.json" | ConvertFrom-Json
           
+          # List all resource groups to see what's actually available
+          Write-Host "Checking all resource groups..."
+          $allRGs = Get-AzResourceGroup | Select-Object -ExpandProperty ResourceGroupName
+          Write-Host "Available resource groups: $($allRGs -join ', ')"
+          
+          # Look for resource groups matching our project name pattern
+          $projectPattern = "*new-project*"
+          $matchingRGs = $allRGs | Where-Object { $_ -like $projectPattern }
+          
+          if ($matchingRGs.Count -gt 0) {
+            Write-Host "Found matching resource group(s): $($matchingRGs -join ', ')"
+            # Assign the first match and trim it immediately
+            $ResourceGroup = [string]$matchingRGs[0].Trim()
+            Write-Host "Assigned and Trimmed ResourceGroup: [$ResourceGroup]"
+          } else {
+            # Try the usual patterns as fallback
+            try {
+              if ($rgParams.parameters.resourceGroups_name) {
+                $ResourceGroup = $rgParams.parameters.resourceGroups_name.value
+              } elseif ($rgParams.parameters.workloads -and $rgParams.parameters.workloads.value.resourceGroups) {
+                # Try all possible formats
+                $formats = @(
+                  "${{ parameters.subscriptionName }}-sub-$($rgParams.parameters.workloads.value.resourceGroups[0].name)-$($rgParams.parameters.location.value)-rg",
+                  "${{ parameters.subscriptionName }}-$($rgParams.parameters.workloads.value.resourceGroups[0].name)-$($rgParams.parameters.location.value)-rg",
+                  "${{ parameters.subscriptionName }}-dev-new-project-$($rgParams.parameters.location.value)-rg",
+                  "${{ parameters.subscriptionName }}-sub-pci-dev-new-project-$($rgParams.parameters.location.value)-rg",
+                  "pci-dev-$($rgParams.parameters.loc.value)-new-project-rg"
+                )
+                
+                foreach ($format in $formats) {
+                  Write-Host "Checking resource group format: $format"
+                  if ($allRGs -contains $format) {
+                    $ResourceGroup = $format
+                    Write-Host "Found matching resource group: $ResourceGroup"
+                    break
+                  }
+                }
+                
+                if (-not $ResourceGroup) {
+                  throw "No matching resource group found"
+                }
+              } else {
+                throw "Cannot find resource group name in parameter file"
+              }
+            } catch {
+              throw "Resource group for new-project could not be found. Available groups: $($allRGs -join ', ')"
+            }
+          }
+          
+          # Ensure ResourceGroup variable is properly set before using it
+          if (-not $ResourceGroup) {
+              throw "ResourceGroup variable is not set after detection logic."
+          }
+
+          # Check the value just before processing
+          Write-Host "ResourceGroup variable right before processing: [$ResourceGroup]"
+
           # Get the Virtual Network ID
           $vnet = Get-AzVirtualNetwork -Name "commnp-sub-centralus-vnet" -ResourceGroupName "commnp-sub-centralus-vnet-rg" -ErrorAction SilentlyContinue
           $vnetId = $vnet.Id
@@ -396,6 +584,13 @@ steps:
             privateDnsZones   = $privateDnsZones
           }
           
+          # Log the deployParams contents
+          Write-Host "DeployParams content just before deployment (Managed Env):"
+          $deployParams | Format-List | Out-String | Write-Host
+
+          # Double-check the ResourceGroupName parameter within the hashtable
+          Write-Host "ResourceGroupName in deployParams (Managed Env): [$($deployParams.ResourceGroupName)]"
+          
           $result = New-AzResourceGroupDeployment @deployParams -ErrorAction Stop
           Write-Host "Managed Environment $($result.Outputs.managedEnvironmentName.Value) deployed successfully"
           
@@ -414,7 +609,57 @@ steps:
         ScriptType: 'InlineScript'
         Inline: |
           Write-Host "Deploying Container Apps..."
-          $ResourceGroup = (Get-Content -Path "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/resourcegroup.east.parameters.json" | ConvertFrom-Json).parameters.resourceGroups_name.value
+          # Get the resource group name using the new format where it's in the workloads object
+          $rgParams = Get-Content -Path "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/resourcegroup.east.parameters.json" | ConvertFrom-Json
+          
+          # List all resource groups to see what's actually available
+          Write-Host "Checking all resource groups..."
+          $allRGs = Get-AzResourceGroup | Select-Object -ExpandProperty ResourceGroupName
+          Write-Host "Available resource groups: $($allRGs -join ', ')"
+          
+          # Look for resource groups matching our project name pattern
+          $projectPattern = "*new-project*"
+          $matchingRGs = $allRGs | Where-Object { $_ -like $projectPattern }
+          
+          if ($matchingRGs.Count -gt 0) {
+            Write-Host "Found matching resource group(s): $($matchingRGs -join ', ')"
+            # Assign the first match and trim it immediately
+            $ResourceGroup = [string]$matchingRGs[0].Trim()
+            Write-Host "Assigned and Trimmed ResourceGroup: [$ResourceGroup]"
+          } else {
+            # Try the usual patterns as fallback
+            try {
+              if ($rgParams.parameters.resourceGroups_name) {
+                $ResourceGroup = $rgParams.parameters.resourceGroups_name.value
+              } elseif ($rgParams.parameters.workloads -and $rgParams.parameters.workloads.value.resourceGroups) {
+                # Try all possible formats
+                $formats = @(
+                  "${{ parameters.subscriptionName }}-sub-$($rgParams.parameters.workloads.value.resourceGroups[0].name)-$($rgParams.parameters.location.value)-rg",
+                  "${{ parameters.subscriptionName }}-$($rgParams.parameters.workloads.value.resourceGroups[0].name)-$($rgParams.parameters.location.value)-rg",
+                  "${{ parameters.subscriptionName }}-dev-new-project-$($rgParams.parameters.location.value)-rg",
+                  "${{ parameters.subscriptionName }}-sub-pci-dev-new-project-$($rgParams.parameters.location.value)-rg",
+                  "pci-dev-$($rgParams.parameters.loc.value)-new-project-rg"
+                )
+                
+                foreach ($format in $formats) {
+                  Write-Host "Checking resource group format: $format"
+                  if ($allRGs -contains $format) {
+                    $ResourceGroup = $format
+                    Write-Host "Found matching resource group: $ResourceGroup"
+                    break
+                  }
+                }
+                
+                if (-not $ResourceGroup) {
+                  throw "No matching resource group found"
+                }
+              } else {
+                throw "Cannot find resource group name in parameter file"
+              }
+            } catch {
+              throw "Resource group for new-project could not be found. Available groups: $($allRGs -join ', ')"
+            }
+          }
           
           # Read the parameters file
           $paramFile = "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/containerApps.east.parameters.json"

@@ -157,10 +157,11 @@ stages:
           - template: templates/master-subscription-template.yml
             parameters:
               subscriptionName: "new-project"
-              subscriptionId: "921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674"  # Using commnp-sub ID, update as needed
-              serviceConnectionId: "25f11d80-28be-4f01-b1f6-6e5bfb927671"  # Using commnp-sub connection, update as needed
+              subscriptionId: "921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674"
+              serviceConnectionId: "25f11d80-28be-4f01-b1f6-6e5bfb927671"
               location: $(LOCATION)
-              projectPath: "config/new-project"
+              projectPath: 'config/new-project'
+              modulesPath: 'azresources/modules'
               deployComponents:
                 subscription: false
                 resourceGroups: true
