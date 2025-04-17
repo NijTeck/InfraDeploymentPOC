@@ -308,7 +308,7 @@ steps:
           if ($matchingRGs.Count -gt 0) {
             Write-Host "Found matching resource group(s): $($matchingRGs -join ', ')"
             # Assign the first match and trim it immediately
-            $ResourceGroup = [string]$matchingRGs[0].Trim()
+            $ResourceGroup = (@($matchingRGs)[0]).Trim()
             Write-Host "Assigned and Trimmed ResourceGroup: [$ResourceGroup]"
           } else {
             # Try the usual patterns as fallback
@@ -400,7 +400,7 @@ steps:
           if ($matchingRGs.Count -gt 0) {
             Write-Host "Found matching resource group(s): $($matchingRGs -join ', ')"
             # Assign the first match and trim it immediately
-            $ResourceGroup = [string]$matchingRGs[0].Trim()
+            $ResourceGroup = (@($matchingRGs)[0]).Trim()
             Write-Host "Assigned and Trimmed ResourceGroup: [$ResourceGroup]"
           } else {
             # Try the usual patterns as fallback
@@ -520,7 +520,7 @@ steps:
           if ($matchingRGs.Count -gt 0) {
             Write-Host "Found matching resource group(s): $($matchingRGs -join ', ')"
             # Assign the first match and trim it immediately
-            $ResourceGroup = [string]$matchingRGs[0].Trim()
+            $ResourceGroup = (@($matchingRGs)[0]).Trim()
             Write-Host "Assigned and Trimmed ResourceGroup: [$ResourceGroup]"
           } else {
             # Try the usual patterns as fallback
@@ -624,7 +624,7 @@ steps:
           if ($matchingRGs.Count -gt 0) {
             Write-Host "Found matching resource group(s): $($matchingRGs -join ', ')"
             # Assign the first match and trim it immediately
-            $ResourceGroup = [string]$matchingRGs[0].Trim()
+            $ResourceGroup = (@($matchingRGs)[0]).Trim()
             Write-Host "Assigned and Trimmed ResourceGroup: [$ResourceGroup]"
           } else {
             # Try the usual patterns as fallback
