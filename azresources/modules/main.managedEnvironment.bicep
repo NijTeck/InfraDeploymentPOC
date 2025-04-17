@@ -13,6 +13,8 @@ param privateDnsZones object
 var managedEnvironmentName = 'pci-${environment}-cus-ncp-web-cae'
 var nsgName = 'pci-${environment}-cus-ncp-web-nsg'
 var privateEndpointName = 'pci-${environment}-cus-ncp-web-cae-pe'
+var infrastructureSubnetName = 'pci-${environment}-cus-ncp-web-snet'
+var peSubnetName = 'f9pcitstcusinternaldmzpesn'
 
 resource managedEnvironment 'Microsoft.App/managedEnvironments@2024-10-02-preview' = {
   name: managedEnvironmentName
@@ -27,7 +29,7 @@ resource managedEnvironment 'Microsoft.App/managedEnvironments@2024-10-02-previe
   properties: {
     vnetConfiguration: {
       internal: true
-      infrastructureSubnetId: '${virtualNetworkId}/subnets/pci-${environment}-cus-ncp-web-snet'
+      infrastructureSubnetId: '${virtualNetworkId}/subnets/${infrastructureSubnetName}'
     }
     appLogsConfiguration: {
       destination: 'log-analytics'
@@ -119,13 +121,14 @@ resource privateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' = {
       }
     ]
     subnet: {
-      id: '${virtualNetworkId}/subnets/f9pcitstcusinternaldmzpesn'
+      id: '${virtualNetworkId}/subnets/${peSubnetName}'
     }
   }
 }
 
 resource privateEndpointDns 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-05-01' = {
-  name: '${privateEndpointName}/default'
+  parent: privateEndpoint
+  name: 'default'
   properties: {
     privateDnsZoneConfigs: [
       {
@@ -136,9 +139,6 @@ resource privateEndpointDns 'Microsoft.Network/privateEndpoints/privateDnsZoneGr
       }
     ]
   }
-  dependsOn: [
-    privateEndpoint
-  ]
 }
 
 output managedEnvironmentId string = managedEnvironment.id

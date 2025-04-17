@@ -30,6 +30,9 @@
         "minimumTlsVersion": {
             "value": "TLS1_2"
         },
+        "environment": {
+            "value": "dev"
+        },
         "allowBlobPublicAccess": {
             "value": false
         },

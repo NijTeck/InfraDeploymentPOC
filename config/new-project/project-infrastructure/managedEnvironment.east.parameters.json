@@ -1,0 +1,48 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "managedEnvironments_name": {
+            "value": "pci-dev-cus-new-cae"
+        },
+        "location": {
+            "value": "centralus"
+        },
+        "environment": {
+            "value": "dev"
+        },
+        "virtualNetworkId": {
+            "value": "/subscriptions/921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674/resourceGroups/commnp-sub-centralus-vnet-rg/providers/Microsoft.Network/virtualNetworks/commnp-sub-centralus-vnet"
+        },
+        "privateDnsZones": {
+            "value": {
+                "azureContainerApps": "/subscriptions/921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674/resourceGroups/commnp-dns-centralus-rg/providers/Microsoft.Network/privateDnsZones/privatelink.azurecontainerapps.io"
+            }
+        },
+        "tags": {
+            "value": {
+                "Environment": "Development",
+                "Department": "IT",
+                "Criticality": "4",
+                "ServiceClass": "Non-Production",
+                "WorkloadName": "new-project",
+                "DateCreated": "04/16/2025",
+                "ReviewDate": "04/16/2026",
+                "Creator": "Azure Admin",
+                "Diagnostics": "true"
+            }
+        },
+        "vnetConfiguration": {
+            "value": {
+                "internal": true,
+                "infrastructureSubnetId": "/subscriptions/921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674/resourceGroups/commnp-sub-centralus-vnet-rg/providers/Microsoft.Network/virtualNetworks/commnp-sub-centralus-vnet/subnets/pci-dev-cus-new-snet"
+            }
+        },
+        "logAnalyticsConfiguration": {
+            "value": {
+                "customerId": "6c0fbee3-1576-4c19-926e-098fa9070cba",
+                "dynamicJsonColumns": false
+            }
+        }
+    }
+} 

@@ -8,6 +8,17 @@
         "location": {
             "value": "centralus"
         },
+        "environment": {
+            "value": "dev"
+        },
+        "virtualNetworkId": {
+            "value": "/subscriptions/921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674/resourceGroups/commnp-dev-ciam-central-rg/providers/Microsoft.Network/virtualNetworks/dev-ciam-vnet"
+        },
+        "privateDnsZones": {
+            "value": {
+                "sqlServer": "/subscriptions/921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674/resourceGroups/commnp-dev-ciam-central-rg/providers/Microsoft.Network/privateDnsZones/privatelink.database.windows.net"
+            }
+        },
         "tags": {
             "value": {
                 "Environment": "Non-Production",

@@ -12,10 +12,16 @@ param privateDnsZones object
 
 @description('The storage container path for vulnerability assessments')
 @secure()
-param vulnerabilityAssessmentsStorageContainerPath string
+param vulnerabilityAssessmentsStorageContainerPath string = ''
 
 var sqlServerName = 'pci-${environment}-cus-ncp-web-sql'
 var privateEndpointName = 'pci-${environment}-cus-ncp-web-sql-pe'
+var peSubnetName = 'f9pcitstcusinternalpesn'
+// Extract subscription, resource group, and VNet name from the virtualNetworkId
+var vnetParts = split(virtualNetworkId, '/')
+var subscriptionId = vnetParts[2]
+var resourceGroupName = vnetParts[4]
+var vnetName = vnetParts[8]
 
 resource sqlServer 'Microsoft.Sql/servers@2024-05-01-preview' = {
   name: sqlServerName
@@ -27,7 +33,6 @@ resource sqlServer 'Microsoft.Sql/servers@2024-05-01-preview' = {
     Diagnostics: 'true'
     DateCreated: '01/22/2025'
   }
-  kind: 'v12.0'
   properties: {
     administratorLogin: 'ncpsqladmin'
     version: '12.0'
@@ -72,13 +77,14 @@ resource privateEndpoint 'Microsoft.Network/privateEndpoints@2024-05-01' = {
       }
     ]
     subnet: {
-      id: '${virtualNetworkId}/subnets/f9pcitstcusinternalpesn'
+      id: resourceId(subscriptionId, resourceGroupName, 'Microsoft.Network/virtualNetworks/subnets', vnetName, peSubnetName)
     }
   }
 }
 
 resource privateEndpointDns 'Microsoft.Network/privateEndpoints/privateDnsZoneGroups@2024-05-01' = {
-  name: '${privateEndpointName}/default'
+  parent: privateEndpoint
+  name: 'default'
   properties: {
     privateDnsZoneConfigs: [
       {
@@ -89,9 +95,6 @@ resource privateEndpointDns 'Microsoft.Network/privateEndpoints/privateDnsZoneGr
       }
     ]
   }
-  dependsOn: [
-    privateEndpoint
-  ]
 }
 
 resource identityWebDb 'Microsoft.Sql/servers/databases@2024-05-01-preview' = {
@@ -104,7 +107,6 @@ resource identityWebDb 'Microsoft.Sql/servers/databases@2024-05-01-preview' = {
     family: 'Gen5'
     capacity: 2
   }
-  kind: 'v12.0,user,vcore'
   properties: {
     collation: 'SQL_Latin1_General_CP1_CI_AS'
     maxSizeBytes: 34359738368
@@ -113,9 +115,22 @@ resource identityWebDb 'Microsoft.Sql/servers/databases@2024-05-01-preview' = {
     licenseType: 'LicenseIncluded'
     readScale: 'Disabled'
     requestedBackupStorageRedundancy: 'Geo'
-    maintenanceConfigurationId: '/subscriptions/31e73e1a-7952-45fe-8e41-8a1316446905/providers/Microsoft.Maintenance/publicMaintenanceConfigurations/SQL_Default'
+    maintenanceConfigurationId: resourceId('Microsoft.Maintenance/publicMaintenanceConfigurations', 'SQL_Default')
     isLedgerOn: false
     availabilityZone: 'NoPreference'
+  }
+}
+
+// Only deploy vulnerability assessments storage if path is provided
+resource vulnerabilityAssessments 'Microsoft.Sql/servers/vulnerabilityAssessments@2024-05-01-preview' = if (!empty(vulnerabilityAssessmentsStorageContainerPath)) {
+  parent: sqlServer
+  name: 'default'
+  properties: {
+    storageContainerPath: vulnerabilityAssessmentsStorageContainerPath
+    recurringScans: {
+      isEnabled: true
+      emailSubscriptionAdmins: true
+    }
   }
 }
 

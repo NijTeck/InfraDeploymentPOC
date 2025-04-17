@@ -18,7 +18,6 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
   }
   sku: {
     name: 'Standard_LRS'
-    tier: 'Standard'
   }
   kind: 'Storage'
   properties: {
@@ -56,10 +55,6 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2024-01-01' = {
 resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2024-01-01' = {
   parent: storageAccount
   name: 'default'
-  sku: {
-    name: 'Standard_LRS'
-    tier: 'Standard'
-  }
   properties: {
     cors: {
       corsRules: []

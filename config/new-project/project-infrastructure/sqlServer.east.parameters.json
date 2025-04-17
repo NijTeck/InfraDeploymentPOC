@@ -1,0 +1,59 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "servers_name": {
+            "value": "pci-dev-cus-new-sql"
+        },
+        "location": {
+            "value": "centralus"
+        },
+        "environment": {
+            "value": "dev"
+        },
+        "virtualNetworkId": {
+            "value": "/subscriptions/921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674/resourceGroups/commnp-sub-centralus-vnet-rg/providers/Microsoft.Network/virtualNetworks/commnp-sub-centralus-vnet"
+        },
+        "privateDnsZones": {
+            "value": {
+                "sqlServer": "/subscriptions/921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674/resourceGroups/commnp-dns-centralus-rg/providers/Microsoft.Network/privateDnsZones/privatelink.database.windows.net"
+            }
+        },
+        "tags": {
+            "value": {
+                "Environment": "Development",
+                "Department": "IT",
+                "Criticality": "4",
+                "ServiceClass": "Non-Production",
+                "WorkloadName": "new-project",
+                "DateCreated": "04/16/2025",
+                "ReviewDate": "04/16/2026",
+                "Creator": "Azure Admin"
+            }
+        },
+        "administratorLogin": {
+            "value": "sqladmin"
+        },
+        "administrators": {
+            "value": {
+                "administratorType": "ActiveDirectory",
+                "principalType": "Group",
+                "login": "DB Administrators",
+                "sid": "e3fa36f3-533e-442c-be94-d1fb03668a6e",
+                "tenantId": "77ead82d-8a2e-4bc2-b8b3-2f8e0d161f2d"
+            }
+        },
+        "databases": {
+            "value": [
+                {
+                    "name": "app-db",
+                    "sku": {
+                        "name": "Basic",
+                        "tier": "Basic",
+                        "capacity": 5
+                    }
+                }
+            ]
+        }
+    }
+} 

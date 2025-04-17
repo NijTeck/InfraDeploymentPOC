@@ -12,9 +12,12 @@ parameters:
     monitor: false
     backup: false
     recovery: false
-    containerApps: false
+    storageAccount: false
     sqlServer: false
-    nsg: false
+    managedEnvironment: false
+    containerApps: false
+  projectPath: ''  # Path to the project configuration, e.g., 'config/new-project'
+  modulesPath: 'azresources/modules'  # Path to the Bicep modules
   location: 'centralus'
 
 steps:
@@ -29,6 +32,84 @@ steps:
         echo "Connected to subscription ${{ parameters.subscriptionName }} (${{ parameters.subscriptionId }})"
         az account show -o table
 
+  # Create subscription-level security groups and assign roles
+  - task: AzurePowerShell@5
+    displayName: "Create and Configure Subscription-Level Security Groups"
+    inputs:
+      azureSubscription: '${{ parameters.serviceConnectionId }}'
+      ScriptType: 'InlineScript'
+      Inline: |
+        # Create subscription-level security groups
+        Write-Host "Creating subscription-level security groups for ${{ parameters.subscriptionName }}"
+        
+        # Create contributors group
+        $contributorsGroup = New-AzADGroup -DisplayName "${{ parameters.subscriptionName }}-contributors" `
+                                           -Description "Subscription contributors for ${{ parameters.subscriptionName }}" `
+                                           -MailNickname "${{ parameters.subscriptionName }}-contributors" `
+                                           -ErrorAction SilentlyContinue
+        
+        if ($contributorsGroup) {
+          Write-Host "Created contributor group: $($contributorsGroup.DisplayName) with Object ID: $($contributorsGroup.Id)"
+          
+          # Assign Contributor role at subscription level
+          New-AzRoleAssignment -ObjectId $contributorsGroup.Id `
+                              -RoleDefinitionName "Contributor" `
+                              -Scope "/subscriptions/${{ parameters.subscriptionId }}" `
+                              -ErrorAction SilentlyContinue
+          
+          # Store the group object ID in a variable for use in subsequent deployments
+          Write-Host "##vso[task.setvariable variable=ContributorsGroupId]$($contributorsGroup.Id)"
+        }
+        else {
+          # Group might already exist, try to get it
+          $existingGroup = Get-AzADGroup -DisplayName "${{ parameters.subscriptionName }}-contributors" -ErrorAction SilentlyContinue
+          if ($existingGroup) {
+            Write-Host "Using existing group: $($existingGroup.DisplayName) with ID: $($existingGroup.Id)"
+            Write-Host "##vso[task.setvariable variable=ContributorsGroupId]$($existingGroup.Id)"
+            
+            # Ensure role assignment exists
+            New-AzRoleAssignment -ObjectId $existingGroup.Id `
+                                -RoleDefinitionName "Contributor" `
+                                -Scope "/subscriptions/${{ parameters.subscriptionId }}" `
+                                -ErrorAction SilentlyContinue
+          }
+        }
+        
+        # Create readers group
+        $readersGroup = New-AzADGroup -DisplayName "${{ parameters.subscriptionName }}-readers" `
+                                      -Description "Subscription readers for ${{ parameters.subscriptionName }}" `
+                                      -MailNickname "${{ parameters.subscriptionName }}-readers" `
+                                      -ErrorAction SilentlyContinue
+        
+        if ($readersGroup) {
+          Write-Host "Created reader group: $($readersGroup.DisplayName) with Object ID: $($readersGroup.Id)"
+          
+          # Assign Reader role at subscription level
+          New-AzRoleAssignment -ObjectId $readersGroup.Id `
+                              -RoleDefinitionName "Reader" `
+                              -Scope "/subscriptions/${{ parameters.subscriptionId }}" `
+                              -ErrorAction SilentlyContinue
+          
+          # Store the group object ID in a variable for use in subsequent deployments
+          Write-Host "##vso[task.setvariable variable=ReadersGroupId]$($readersGroup.Id)"
+        }
+        else {
+          # Group might already exist, try to get it
+          $existingGroup = Get-AzADGroup -DisplayName "${{ parameters.subscriptionName }}-readers" -ErrorAction SilentlyContinue
+          if ($existingGroup) {
+            Write-Host "Using existing group: $($existingGroup.DisplayName) with ID: $($existingGroup.Id)"
+            Write-Host "##vso[task.setvariable variable=ReadersGroupId]$($existingGroup.Id)"
+            
+            # Ensure role assignment exists
+            New-AzRoleAssignment -ObjectId $existingGroup.Id `
+                                -RoleDefinitionName "Reader" `
+                                -Scope "/subscriptions/${{ parameters.subscriptionId }}" `
+                                -ErrorAction SilentlyContinue
+          }
+        }
+      azurePowerShellVersion: 'LatestVersion'
+      pwsh: true
+
   # Deploy subscription-level resources if enabled
   - ${{ if eq(parameters.deployComponents.subscription, true) }}:
     - task: AzureCLI@2
@@ -39,11 +120,16 @@ steps:
         scriptLocation: 'inlineScript'
         inlineScript: |
           echo "Deploying subscription configuration..."
+          PARAMS_PATH="$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/subscription/east.parameters.json"
+          if [ -n "${{ parameters.projectPath }}" ]; then
+            PARAMS_PATH="$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/subscription/east.parameters.json"
+          fi
+          
           az deployment sub create \
             --name "${{ parameters.subscriptionName }}-subscription-$(Build.BuildNumber)" \
             --location "${{ parameters.location }}" \
-            --template-file "$(System.DefaultWorkingDirectory)/azresources/modules/main.subscription.bicep" \
-            --parameters "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/subscription/east.parameters.json" \
+            --template-file "$(System.DefaultWorkingDirectory)/${{ parameters.modulesPath }}/main.subscription.bicep" \
+            --parameters "$PARAMS_PATH" \
             --parameters location="${{ parameters.location }}" \
             --subscription "${{ parameters.subscriptionId }}"
 
@@ -58,13 +144,99 @@ steps:
         scriptLocation: 'inlineScript'
         inlineScript: |
           echo "Deploying resource groups..."
+          PARAMS_PATH="$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/resourcegroup/resourcegroup.east.parameters.json"
+          if [ -n "${{ parameters.projectPath }}" ]; then
+            PARAMS_PATH="$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/resourcegroup.east.parameters.json"
+          fi
+          
           az deployment sub create \
             --name "${{ parameters.subscriptionName }}-resourcegroups-$(Build.BuildNumber)" \
             --location "${{ parameters.location }}" \
-            --template-file "$(System.DefaultWorkingDirectory)/azresources/modules/main.resourcegroup.bicep" \
-            --parameters "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/resourcegroup/resourcegroup.east.parameters.json" \
+            --template-file "$(System.DefaultWorkingDirectory)/${{ parameters.modulesPath }}/main.resourcegroup.bicep" \
+            --parameters "$PARAMS_PATH" \
             --parameters loc="${{ parameters.location }}" \
             --subscription "${{ parameters.subscriptionId }}"
+      
+    # Then, create and assign security groups for each resource group
+    - task: AzurePowerShell@5
+      displayName: "Configure Resource Group RBAC"
+      inputs:
+        azureSubscription: '${{ parameters.serviceConnectionId }}'
+        ScriptType: 'InlineScript'
+        Inline: |
+          # Get all resource groups in the subscription
+          $resourceGroups = Get-AzResourceGroup
+
+          # For each resource group, create security groups and assign roles
+          # Skip NetworkWatcherRG resource groups
+          foreach ($rg in $resourceGroups) {
+            if ($rg.ResourceGroupName -eq "NetworkWatcherRG") {
+              Write-Host "Skipping NetworkWatcherRG"
+              continue
+            }
+            
+            Write-Host "Processing resource group: $($rg.ResourceGroupName)"
+            
+            # Create contributors group
+            $rgContributorsGroup = New-AzADGroup -DisplayName "rg-$($rg.ResourceGroupName.ToLower())-contributors" `
+                                                -Description "Resource group contributors for $($rg.ResourceGroupName)" `
+                                                -MailNickname "rg-$($rg.ResourceGroupName.ToLower())-contributors" `
+                                                -ErrorAction SilentlyContinue
+            
+            if ($rgContributorsGroup) {
+              Write-Host "Created RG contributor group: $($rgContributorsGroup.DisplayName) with Object ID: $($rgContributorsGroup.Id)"
+              
+              # Assign Contributor role at resource group level
+              New-AzRoleAssignment -ObjectId $rgContributorsGroup.Id `
+                                  -RoleDefinitionName "Contributor" `
+                                  -ResourceGroupName $rg.ResourceGroupName `
+                                  -ErrorAction SilentlyContinue
+            }
+            else {
+              # Group might already exist, try to get it
+              $existingGroup = Get-AzADGroup -DisplayName "rg-$($rg.ResourceGroupName.ToLower())-contributors" -ErrorAction SilentlyContinue
+              if ($existingGroup) {
+                Write-Host "Using existing group: $($existingGroup.DisplayName)"
+                
+                # Assign Contributor role at resource group level
+                New-AzRoleAssignment -ObjectId $existingGroup.Id `
+                                    -RoleDefinitionName "Contributor" `
+                                    -ResourceGroupName $rg.ResourceGroupName `
+                                    -ErrorAction SilentlyContinue
+              }
+            }
+            
+            # Create readers group
+            $rgReadersGroup = New-AzADGroup -DisplayName "rg-$($rg.ResourceGroupName.ToLower())-readers" `
+                                            -Description "Resource group readers for $($rg.ResourceGroupName)" `
+                                            -MailNickname "rg-$($rg.ResourceGroupName.ToLower())-readers" `
+                                            -ErrorAction SilentlyContinue
+            
+            if ($rgReadersGroup) {
+              Write-Host "Created RG reader group: $($rgReadersGroup.DisplayName) with Object ID: $($rgReadersGroup.Id)"
+              
+              # Assign Reader role at resource group level
+              New-AzRoleAssignment -ObjectId $rgReadersGroup.Id `
+                                  -RoleDefinitionName "Reader" `
+                                  -ResourceGroupName $rg.ResourceGroupName `
+                                  -ErrorAction SilentlyContinue
+            }
+            else {
+              # Group might already exist, try to get it
+              $existingGroup = Get-AzADGroup -DisplayName "rg-$($rg.ResourceGroupName.ToLower())-readers" -ErrorAction SilentlyContinue
+              if ($existingGroup) {
+                Write-Host "Using existing group: $($existingGroup.DisplayName)"
+                
+                # Assign Reader role at resource group level
+                New-AzRoleAssignment -ObjectId $existingGroup.Id `
+                                    -RoleDefinitionName "Reader" `
+                                    -ResourceGroupName $rg.ResourceGroupName `
+                                    -ErrorAction SilentlyContinue
+              }
+            }
+          }
+        azurePowerShellVersion: 'LatestVersion'
+        pwsh: true
 
   # Deploy network resources if enabled
   - ${{ if eq(parameters.deployComponents.network, true) }}:
@@ -76,86 +248,70 @@ steps:
         scriptLocation: 'inlineScript'
         inlineScript: |
           echo "Deploying network resources..."
+          PARAMS_PATH="$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/network/network.basic.east.parameters.json"
+          if [ -n "${{ parameters.projectPath }}" ]; then
+            PARAMS_PATH="$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/network.basic.east.parameters.json"
+          fi
+          
           az deployment sub create \
             --name "${{ parameters.subscriptionName }}-network-$(Build.BuildNumber)" \
             --location "${{ parameters.location }}" \
-            --template-file "$(System.DefaultWorkingDirectory)/azresources/modules/main.network.bicep" \
-            --parameters "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/network/network.basic.east.parameters.json" \
+            --template-file "$(System.DefaultWorkingDirectory)/${{ parameters.modulesPath }}/main.network.bicep" \
+            --parameters "$PARAMS_PATH" \
             --parameters loc="${{ parameters.location }}" \
             --subscription "${{ parameters.subscriptionId }}"
 
   # Deploy monitor resources if enabled
   - ${{ if eq(parameters.deployComponents.monitor, true) }}:
     - task: AzureCLI@2
-      displayName: "Deploy Monitoring Resources"
+      displayName: "Deploy Monitor Resources"
       inputs:
         azureSubscription: '${{ parameters.serviceConnectionId }}'
         scriptType: 'bash'
         scriptLocation: 'inlineScript'
         inlineScript: |
           echo "Deploying monitoring resources..."
+          PARAMS_PATH="$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/monitor/east.parameters.json"
+          if [ -n "${{ parameters.projectPath }}" ]; then
+            PARAMS_PATH="$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/monitor/east.parameters.json"
+          fi
+          
           az deployment sub create \
             --name "${{ parameters.subscriptionName }}-monitor-$(Build.BuildNumber)" \
             --location "${{ parameters.location }}" \
-            --template-file "$(System.DefaultWorkingDirectory)/azresources/modules/main.monitor.bicep" \
-            --parameters "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/monitor/east.parameters.json" \
-            --parameters loc="${{ parameters.location }}" \
+            --template-file "$(System.DefaultWorkingDirectory)/${{ parameters.modulesPath }}/main.monitor.bicep" \
+            --parameters "$PARAMS_PATH" \
+            --parameters location="${{ parameters.location }}" \
             --subscription "${{ parameters.subscriptionId }}"
 
-  # Deploy backup resources if enabled
-  - ${{ if eq(parameters.deployComponents.backup, true) }}:
-    - task: AzureCLI@2
-      displayName: "Deploy Backup Resources"
-      inputs:
-        azureSubscription: '${{ parameters.serviceConnectionId }}'
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          echo "Deploying backup resources..."
-          az deployment sub create \
-            --name "${{ parameters.subscriptionName }}-backup-$(Build.BuildNumber)" \
-            --location "${{ parameters.location }}" \
-            --template-file "$(System.DefaultWorkingDirectory)/azresources/modules/main.backup.bicep" \
-            --parameters "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/backup/east.parameters.json" \
-            --parameters loc="${{ parameters.location }}" \
-            --subscription "${{ parameters.subscriptionId }}"
-  
-  # Deploy recovery resources if enabled
-  - ${{ if eq(parameters.deployComponents.recovery, true) }}:
-    - task: AzureCLI@2
-      displayName: "Deploy Recovery Resources"
-      inputs:
-        azureSubscription: '${{ parameters.serviceConnectionId }}'
-        scriptType: 'bash'
-        scriptLocation: 'inlineScript'
-        inlineScript: |
-          echo "Deploying recovery resources..."
-          az deployment sub create \
-            --name "${{ parameters.subscriptionName }}-recovery-$(Build.BuildNumber)" \
-            --location "${{ parameters.location }}" \
-            --template-file "$(System.DefaultWorkingDirectory)/azresources/modules/main.recovery.bicep" \
-            --parameters "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/recovery/east.parameters.json" \
-            --parameters loc="${{ parameters.location }}" \
-            --subscription "${{ parameters.subscriptionId }}"
-
-  # Deploy Container Apps if enabled
-  - ${{ if eq(parameters.deployComponents.containerApps, true) }}:
+  # Deploy storage account resources if enabled
+  - ${{ if eq(parameters.deployComponents.storageAccount, true) }}:
     - task: AzurePowerShell@5
-      displayName: "Deploy Container Apps"
+      displayName: "Deploy Storage Account"
       inputs:
         azureSubscription: '${{ parameters.serviceConnectionId }}'
         ScriptType: 'InlineScript'
         Inline: |
-          Write-Host "Deploying Container Apps..."
-          New-AzResourceGroupDeployment `
-            -ResourceGroupName "${{ parameters.subscriptionName }}-dev-ciam-central-rg" `
-            -TemplateFile "$(System.DefaultWorkingDirectory)/azresources/modules/main.containerApps.bicep" `
-            -TemplateParameterFile "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/containerApps.east.parameters.json" `
-            -Verbose
+          Write-Host "Deploying Storage Account..."
+          $ResourceGroup = (Get-Content -Path "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/resourcegroup.east.parameters.json" | ConvertFrom-Json).parameters.resourceGroups_name.value
+          
+          $deployParams = @{
+            ResourceGroupName = $ResourceGroup
+            TemplateFile      = "$(System.DefaultWorkingDirectory)/${{ parameters.modulesPath }}/main.storageAccount.bicep"
+            TemplateParameterFile = "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/storageAccount.east.parameters.json"
+            environment       = "${{ parameters.deployComponents.environment }}"
+          }
+          
+          $result = New-AzResourceGroupDeployment @deployParams -ErrorAction Stop
+          Write-Host "Storage Account $($result.Outputs.storageAccountName.Value) deployed successfully"
+          
+          # Store output for later use
+          Write-Host "##vso[task.setvariable variable=StorageAccountName]$($result.Outputs.storageAccountName.Value)"
+          Write-Host "##vso[task.setvariable variable=StorageAccountId]$($result.Outputs.storageAccountId.Value)"
         azurePowerShellVersion: 'LatestVersion'
         pwsh: true
 
-  # Deploy SQL Server if enabled
+  # Deploy SQL Server resources if enabled
   - ${{ if eq(parameters.deployComponents.sqlServer, true) }}:
     - task: AzurePowerShell@5
       displayName: "Deploy SQL Server"
@@ -164,27 +320,140 @@ steps:
         ScriptType: 'InlineScript'
         Inline: |
           Write-Host "Deploying SQL Server..."
-          New-AzResourceGroupDeployment `
-            -ResourceGroupName "${{ parameters.subscriptionName }}-dev-ciam-central-rg" `
-            -TemplateFile "$(System.DefaultWorkingDirectory)/azresources/modules/main.sqlServer.bicep" `
-            -TemplateParameterFile "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/sqlServer.east.parameters.json" `
-            -Verbose
+          $ResourceGroup = (Get-Content -Path "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/resourcegroup.east.parameters.json" | ConvertFrom-Json).parameters.resourceGroups_name.value
+          
+          # Get the Virtual Network ID
+          $vnet = Get-AzVirtualNetwork -Name "commnp-sub-centralus-vnet" -ResourceGroupName "commnp-sub-centralus-vnet-rg" -ErrorAction SilentlyContinue
+          $vnetId = $vnet.Id
+          
+          # Create container for vulnerability assessments if we have a storage account
+          $vulnerabilityPath = ""
+          if (Test-Path variable:StorageAccountName) {
+            $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroup -Name $env:StorageAccountName -ErrorAction SilentlyContinue
+            if ($storageAccount) {
+              $storageKey = (Get-AzStorageAccountKey -ResourceGroupName $ResourceGroup -Name $env:StorageAccountName)[0].Value
+              $storageContext = New-AzStorageContext -StorageAccountName $env:StorageAccountName -StorageAccountKey $storageKey
+              New-AzStorageContainer -Name "vulnerability-assessments" -Context $storageContext -ErrorAction SilentlyContinue
+              $vulnerabilityPath = "https://$($env:StorageAccountName).blob.core.windows.net/vulnerability-assessments"
+            }
+          }
+          
+          # Get Private DNS Zone IDs
+          $dnsRgName = "commnp-dns-centralus-rg"
+          $privateDnsZones = @{
+            sqlServer = "/subscriptions/${{ parameters.subscriptionId }}/resourceGroups/$dnsRgName/providers/Microsoft.Network/privateDnsZones/privatelink.database.windows.net"
+          }
+          
+          $deployParams = @{
+            ResourceGroupName = $ResourceGroup
+            TemplateFile      = "$(System.DefaultWorkingDirectory)/${{ parameters.modulesPath }}/main.sqlServer.bicep"
+            TemplateParameterFile = "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/sqlServer.east.parameters.json"
+            environment       = "${{ parameters.deployComponents.environment }}"
+            virtualNetworkId  = $vnetId
+            privateDnsZones   = $privateDnsZones
+          }
+          
+          if (-not [string]::IsNullOrEmpty($vulnerabilityPath)) {
+            $deployParams["vulnerabilityAssessmentsStorageContainerPath"] = $vulnerabilityPath
+          }
+          
+          $result = New-AzResourceGroupDeployment @deployParams -ErrorAction Stop
+          Write-Host "SQL Server $($result.Outputs.sqlServerName.Value) deployed successfully"
+          
+          # Store output for later use
+          Write-Host "##vso[task.setvariable variable=SqlServerName]$($result.Outputs.sqlServerName.Value)"
+          Write-Host "##vso[task.setvariable variable=SqlServerId]$($result.Outputs.sqlServerId.Value)"
         azurePowerShellVersion: 'LatestVersion'
         pwsh: true
 
-  # Deploy NSG if enabled
-  - ${{ if eq(parameters.deployComponents.nsg, true) }}:
+  # Deploy Managed Environment resources if enabled
+  - ${{ if eq(parameters.deployComponents.managedEnvironment, true) }}:
     - task: AzurePowerShell@5
-      displayName: "Deploy NSG"
+      displayName: "Deploy Managed Environment"
       inputs:
         azureSubscription: '${{ parameters.serviceConnectionId }}'
         ScriptType: 'InlineScript'
         Inline: |
-          Write-Host "Deploying NSG..."
-          New-AzResourceGroupDeployment `
-            -ResourceGroupName "${{ parameters.subscriptionName }}-dev-ciam-central-rg" `
-            -TemplateFile "$(System.DefaultWorkingDirectory)/azresources/modules/main.nsg.bicep" `
-            -TemplateParameterFile "$(System.DefaultWorkingDirectory)/config/${{ parameters.subscriptionName }}/nsg.east.parameters.json" `
-            -Verbose
+          Write-Host "Deploying Managed Environment for Container Apps..."
+          $ResourceGroup = (Get-Content -Path "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/resourcegroup.east.parameters.json" | ConvertFrom-Json).parameters.resourceGroups_name.value
+          
+          # Get the Virtual Network ID
+          $vnet = Get-AzVirtualNetwork -Name "commnp-sub-centralus-vnet" -ResourceGroupName "commnp-sub-centralus-vnet-rg" -ErrorAction SilentlyContinue
+          $vnetId = $vnet.Id
+          
+          # Get Private DNS Zone IDs
+          $dnsRgName = "commnp-dns-centralus-rg"
+          $privateDnsZones = @{
+            azureContainerApps = "/subscriptions/${{ parameters.subscriptionId }}/resourceGroups/$dnsRgName/providers/Microsoft.Network/privateDnsZones/privatelink.azurecontainerapps.io"
+          }
+          
+          $deployParams = @{
+            ResourceGroupName = $ResourceGroup
+            TemplateFile      = "$(System.DefaultWorkingDirectory)/${{ parameters.modulesPath }}/main.managedEnvironment.bicep"
+            TemplateParameterFile = "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/managedEnvironment.east.parameters.json"
+            environment       = "${{ parameters.deployComponents.environment }}"
+            virtualNetworkId  = $vnetId
+            privateDnsZones   = $privateDnsZones
+          }
+          
+          $result = New-AzResourceGroupDeployment @deployParams -ErrorAction Stop
+          Write-Host "Managed Environment $($result.Outputs.managedEnvironmentName.Value) deployed successfully"
+          
+          # Store output for later use
+          Write-Host "##vso[task.setvariable variable=ManagedEnvironmentName]$($result.Outputs.managedEnvironmentName.Value)"
+          Write-Host "##vso[task.setvariable variable=ManagedEnvironmentId]$($result.Outputs.managedEnvironmentId.Value)"
+        azurePowerShellVersion: 'LatestVersion'
+        pwsh: true
+
+  # Deploy Container Apps resources if enabled
+  - ${{ if eq(parameters.deployComponents.containerApps, true) }}:
+    - task: AzurePowerShell@5
+      displayName: "Deploy Container Apps"
+      inputs:
+        azureSubscription: '${{ parameters.serviceConnectionId }}'
+        ScriptType: 'InlineScript'
+        Inline: |
+          Write-Host "Deploying Container Apps..."
+          $ResourceGroup = (Get-Content -Path "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/resourcegroup.east.parameters.json" | ConvertFrom-Json).parameters.resourceGroups_name.value
+          
+          # Read the parameters file
+          $paramFile = "$(System.DefaultWorkingDirectory)/${{ parameters.projectPath }}/project-infrastructure/containerApps.east.parameters.json"
+          $containerAppsParams = Get-Content -Path $paramFile | ConvertFrom-Json -Depth 10
+          
+          # Update with actual environment ID
+          foreach ($app in $containerAppsParams.parameters.containerApps.value) {
+            $app.containerAppEnvironmentId = $env:ManagedEnvironmentId
+            
+            # Update connection strings
+            foreach ($secret in $app.secrets) {
+              if ($secret.name -eq "storage-connection-string" -and (Test-Path variable:StorageAccountName)) {
+                $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroup -Name $env:StorageAccountName -ErrorAction SilentlyContinue
+                if ($storageAccount) {
+                  $storageKey = (Get-AzStorageAccountKey -ResourceGroupName $ResourceGroup -Name $env:StorageAccountName)[0].Value
+                  $secret.value = "DefaultEndpointsProtocol=https;AccountName=$($env:StorageAccountName);AccountKey=$storageKey;EndpointSuffix=core.windows.net"
+                }
+              }
+              if ($secret.name -eq "sql-connection-string" -and (Test-Path variable:SqlServerName)) {
+                $secret.value = "Server=$($env:SqlServerName).database.windows.net;Database=app-db;Authentication=Active Directory Default"
+              }
+            }
+          }
+          
+          # Save updated parameters to temporary file
+          $tempFile = Join-Path $env:TEMP "container-apps-params-$((New-Guid).ToString()).json"
+          $containerAppsParams | ConvertTo-Json -Depth 10 | Set-Content -Path $tempFile
+          
+          $deployParams = @{
+            ResourceGroupName = $ResourceGroup
+            TemplateFile      = "$(System.DefaultWorkingDirectory)/${{ parameters.modulesPath }}/main.containerApps.bicep"
+            TemplateParameterFile = $tempFile
+            environment       = "${{ parameters.deployComponents.environment }}"
+          }
+          
+          $result = New-AzResourceGroupDeployment @deployParams -ErrorAction Stop
+          Write-Host "Container Apps deployed successfully"
+          
+          # Clean up temp file
+          Remove-Item -Path $tempFile -Force
         azurePowerShellVersion: 'LatestVersion'
         pwsh: true

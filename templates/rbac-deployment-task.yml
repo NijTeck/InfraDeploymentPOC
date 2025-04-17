@@ -4,7 +4,7 @@ parameters:
   subscriptionId: ''
   serviceConnectionId: ''
   location: 'centralus'
-
+  
 steps:
   - task: AzurePowerShell@5
     displayName: "Create Entra ID Security Groups"

@@ -1,0 +1,31 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "location": {
+            "value": "centralus"
+        },
+        "loc": {
+            "value": "cus"
+        },
+        "workloads": {
+            "value": {
+                "resourceGroups": [
+                    {
+                        "name": "pci-dev-new-project",
+                        "tags": {
+                            "Environment": "Development",
+                            "Department": "IT",
+                            "Criticality": "4",
+                            "ServiceClass": "Non-Production",
+                            "WorkloadName": "new-project",
+                            "DateCreated": "04/16/2025",
+                            "ReviewDate": "04/16/2026",
+                            "Creator": "Azure Admin"
+                        }
+                    }
+                ]
+            }
+        }
+    }
+} 

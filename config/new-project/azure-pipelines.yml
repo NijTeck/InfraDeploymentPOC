@@ -1,0 +1,98 @@
+trigger:
+  branches:
+    include:
+    - master
+  paths:
+    include:
+    - InfraDeployment%20POC/config/new-project/project-infrastructure/*
+    - InfraDeployment%20POC/azresources/modules/main.containerApps.bicep
+    - InfraDeployment%20POC/azresources/modules/main.sqlServer.bicep
+    - InfraDeployment%20POC/azresources/modules/main.managedEnvironment.bicep
+    - InfraDeployment%20POC/azresources/modules/main.storageAccount.bicep
+    - InfraDeployment%20POC/azresources/modules/main.nsg.bicep
+
+pr:
+  branches:
+    include:
+    - master
+  paths:
+    include:
+    - InfraDeployment%20POC/config/new-project/project-infrastructure/*
+    - InfraDeployment%20POC/azresources/modules/main.containerApps.bicep
+    - InfraDeployment%20POC/azresources/modules/main.sqlServer.bicep
+    - InfraDeployment%20POC/azresources/modules/main.managedEnvironment.bicep
+    - InfraDeployment%20POC/azresources/modules/main.storageAccount.bicep
+    - InfraDeployment%20POC/azresources/modules/main.nsg.bicep
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  SUBSCRIPTION_ID: '00000000-0000-0000-0000-000000000000'
+  TENANT_ID: '00000000-0000-0000-0000-000000000000'
+  SERVICE_CONNECTION_ID: 'new-project-commercial-nonprod'
+  ENVIRONMENT: 'dev'
+  LOCATION: 'centralus'
+
+stages:
+- stage: DetectChanges
+  displayName: 'Detect Changes'
+  jobs:
+  - job: CheckChanges
+    displayName: 'Check for Configuration Changes'
+    steps:
+    - checkout: self
+      fetchDepth: 2
+    
+    - bash: |
+        echo "Checking for changes in project files..."
+        
+        # Check if project files have changed
+        if [[ $(git diff HEAD^ HEAD --name-only | grep -c "InfraDeployment%20POC/config/new-project/project-infrastructure/") -gt 0 ]]; then
+          echo "Project configuration files have changed."
+          echo "##vso[task.setvariable variable=configChanged;isOutput=true]true"
+        else
+          echo "No project configuration changes detected."
+          echo "##vso[task.setvariable variable=configChanged;isOutput=true]false"
+        fi
+        
+        # Check if Bicep modules have changed
+        if [[ $(git diff HEAD^ HEAD --name-only | grep -c -E "InfraDeployment%20POC/azresources/modules/main.(containerApps|sqlServer|managedEnvironment|storageAccount|nsg).bicep") -gt 0 ]]; then
+          echo "Bicep modules have changed."
+          echo "##vso[task.setvariable variable=modulesChanged;isOutput=true]true"
+        else
+          echo "No Bicep module changes detected."
+          echo "##vso[task.setvariable variable=modulesChanged;isOutput=true]false"
+        fi
+      name: changeDetection
+      displayName: 'Detect Changes in Files'
+
+- stage: DeployProject
+  displayName: 'Deploy Project'
+  dependsOn: DetectChanges
+  condition: or(eq(dependencies.DetectChanges.outputs['CheckChanges.changeDetection.configChanged'], 'true'), eq(dependencies.DetectChanges.outputs['CheckChanges.changeDetection.modulesChanged'], 'true'))
+  jobs:
+  - job: Deploy
+    displayName: 'Deploy Project Resources'
+    steps:
+    - checkout: self
+    
+    - template: ../../templates/master-subscription-template.yml
+      parameters:
+        subscriptionName: 'new-project'
+        subscriptionId: $(SUBSCRIPTION_ID)
+        serviceConnectionId: $(SERVICE_CONNECTION_ID)
+        projectPath: 'InfraDeployment%20POC/config/new-project'
+        modulesPath: 'InfraDeployment%20POC/azresources/modules'
+        location: $(LOCATION)
+        deployComponents:
+          subscription: false
+          resourceGroups: true
+          network: false
+          monitor: false
+          backup: false
+          recovery: false
+          storageAccount: true
+          sqlServer: true
+          managedEnvironment: true
+          containerApps: true 

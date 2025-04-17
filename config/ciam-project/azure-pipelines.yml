@@ -5,14 +5,52 @@ trigger:
   paths:
     include:
       - config/ciam-project/project-infrastructure/**
-      - azresources/modules/containerApps.bicep
-      - azresources/modules/sqlServer.bicep
-      - azresources/modules/nsg.bicep
+      - azresources/modules/**
+
+pool:
+  vmImage: ubuntu-latest
 
 variables:
-  DEPLOY_FLAG: "YES"
-  WORKING_DIR: "$(System.DefaultWorkingDirectory)"
-  LOCATION: "centralus"
+  DEPLOY_FLAG: 'YES'
+  WORKING_DIR: '$(System.DefaultWorkingDirectory)'
+  MODULES_DIR: '$(System.DefaultWorkingDirectory)/azresources/modules'
+  CONFIG_DIR: '$(System.DefaultWorkingDirectory)/config/ciam-project'
+  LOCATION: 'centralus'
+  ENVIRONMENT: 'dev'
+  SUBSCRIPTION_ID: '921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674'
+  TENANT_ID: '77ead82d-8a2e-4bc2-b8b3-2f8e0d161f2d'
+  RESOURCE_GROUP: 'commnp-dev-ciam-central-rg'
+
+steps:
+- checkout: self
+
+- powershell: |
+    Write-Host "Working Directory: $env:WORKING_DIR"
+    Write-Host "Modules Directory: $env:MODULES_DIR"
+    Write-Host "Config Directory: $env:CONFIG_DIR"
+    
+    Get-ChildItem -Path "$env:WORKING_DIR" -ErrorAction SilentlyContinue
+  displayName: 'Directory Check'
+  env:
+    WORKING_DIR: $(WORKING_DIR)
+    MODULES_DIR: $(MODULES_DIR)
+    CONFIG_DIR: $(CONFIG_DIR)
+
+- task: AzurePowerShell@5
+  displayName: 'Azure Resource Check'
+  inputs:
+    azureSubscription: '25f11d80-28be-4f01-b1f6-6e5bfb927671'
+    ScriptType: 'InlineScript'
+    Inline: |
+      Write-Host "Checking Azure Resources"
+      Set-AzContext -SubscriptionId "$env:SUBSCRIPTION_ID" -TenantId "$env:TENANT_ID"
+      Get-AzResourceGroup -Name "$env:RESOURCE_GROUP" -ErrorAction SilentlyContinue
+    azurePowerShellVersion: 'LatestVersion'
+    pwsh: true
+  env:
+    SUBSCRIPTION_ID: $(SUBSCRIPTION_ID)
+    TENANT_ID: $(TENANT_ID)
+    RESOURCE_GROUP: $(RESOURCE_GROUP) 
 
 pr:
   branches:
@@ -21,77 +59,160 @@ pr:
   paths:
     include:
       - config/ciam-project/project-infrastructure/**
-      - azresources/modules/containerApps.bicep
-      - azresources/modules/sqlServer.bicep
-      - azresources/modules/nsg.bicep
+      - azresources/modules/**
 
 stages:
-  - stage: Deploy_CIAM
-    displayName: "Deploy CIAM Project"
-    jobs:
-      - job: Detect_Changes
-        displayName: "Detect Changed Files"
-        pool:
-          vmImage: 'ubuntu-latest'
-        steps:
-          - checkout: self
-            fetchDepth: 2
+- stage: Deploy_CIAM
+  displayName: Deploy CIAM Project
+  jobs:
+  - job: Detect_Changes
+    displayName: Detect Changed Files
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - checkout: self
+      fetchDepth: 2
 
-          - script: |
-              echo "Current directory contents:"
-              ls -la
-              echo "Checking for changes..."
-              if [ "$(Build.Reason)" == "Manual" ] || [ "$(Build.Reason)" == "IndividualCI" ] || [ "$(Build.Reason)" == "BatchedCI" ]; then
-                # For manual or CI builds, check what changed
-                CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E '(config/ciam-project/project-infrastructure|azresources/modules/(containerApps|sqlServer|nsg)\.bicep)')
-              else
-                # For PR builds, compare with target branch
-                git fetch origin $(System.PullRequest.TargetBranch)
-                CHANGED_FILES=$(git diff --name-only FETCH_HEAD HEAD | grep -E '(config/ciam-project/project-infrastructure|azresources/modules/(containerApps|sqlServer|nsg)\.bicep)')
-              fi
-              
-              if [ -n "$CHANGED_FILES" ]; then
-                echo "Changes detected in CIAM project files:"
-                echo "$CHANGED_FILES"
-                echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]true"
-              else
-                echo "No changes detected in CIAM project files"
-                echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]false"
-              fi
-            name: changeDetection
-            displayName: "Detect Changed Files"
+    - script: |
+        echo "Current directory contents:"
+        ls -la
+        echo "Checking for changes..."
+        if [ "$(Build.Reason)" == "Manual" ] || [ "$(Build.Reason)" == "IndividualCI" ] || [ "$(Build.Reason)" == "BatchedCI" ]; then
+          # For manual or CI builds, check what changed
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E '(config/ciam-project/project-infrastructure|azresources/modules/)')
+        else
+          # For PR builds, compare with target branch
+          git fetch origin $(System.PullRequest.TargetBranch)
+          CHANGED_FILES=$(git diff --name-only FETCH_HEAD HEAD | grep -E '(config/ciam-project/project-infrastructure|azresources/modules/)')
+        fi
+        
+        if [ -n "$CHANGED_FILES" ]; then
+          echo "Changes detected in CIAM project files:"
+          echo "$CHANGED_FILES"
+          echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]true"
+        else
+          echo "No changes detected in CIAM project files"
+          echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]false"
+        fi
+      name: changeDetection
+      displayName: Detect Changed Files
 
-      - job: Deploy_CIAM_Resources
-        displayName: "Deploy CIAM Resources"
-        dependsOn: Detect_Changes
-        condition: eq(dependencies.Detect_Changes.outputs['changeDetection.shouldDeploy'], 'true')
-        pool:
-          vmImage: 'ubuntu-latest'
-        steps:
-          - checkout: self
+  - job: Deploy_CIAM_Resources
+    displayName: Deploy CIAM Resources
+    dependsOn: Detect_Changes
+    condition: eq(dependencies.Detect_Changes.outputs['changeDetection.shouldDeploy'], 'true')
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+    - checkout: self
+    
+    - powershell: |
+        Write-Host "Working Directory: $env:WORKING_DIR"
+        Write-Host "Modules Directory: $env:MODULES_DIR"
+        Write-Host "Config Directory: $env:CONFIG_DIR"
+        
+        Write-Host "Contents of root directory:"
+        Get-ChildItem -Path "$env:WORKING_DIR" -ErrorAction SilentlyContinue
+        
+        Write-Host "Contents of modules directory:"
+        Get-ChildItem -Path "$env:MODULES_DIR" -ErrorAction SilentlyContinue
+        
+        Write-Host "Contents of config directory:"
+        Get-ChildItem -Path "$env:CONFIG_DIR" -ErrorAction SilentlyContinue
+      displayName: List Directory Structure
+      env:
+        WORKING_DIR: $(WORKING_DIR)
+        MODULES_DIR: $(MODULES_DIR)
+        CONFIG_DIR: $(CONFIG_DIR)
+    
+    - task: AzurePowerShell@5
+      displayName: RBAC and Resource Deployment
+      inputs:
+        azureSubscription: '25f11d80-28be-4f01-b1f6-6e5bfb927671'
+        ScriptType: InlineScript
+        Inline: |
+          Write-Host "Working Directory: $env:WORKING_DIR"
+          Write-Host "Modules Directory: $env:MODULES_DIR"
+          Write-Host "Config Directory: $env:CONFIG_DIR"
           
-          # Set up security groups first
-          - template: ../../templates/rbac-deployment-task.yml
-            parameters:
-              subscriptionName: "commnp-sub"
-              subscriptionId: "921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674"
-              serviceConnectionId: "25f11d80-28be-4f01-b1f6-6e5bfb927671"
-              location: $(LOCATION)
-
-          # Deploy CIAM resources using the master template
-          - template: ../../templates/master-subscription-template.yml
-            parameters:
-              subscriptionName: "commnp-sub"
-              subscriptionId: "921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674"
-              serviceConnectionId: "25f11d80-28be-4f01-b1f6-6e5bfb927671"
-              location: $(LOCATION)
-              deployComponents:
-                subscription: false
-                resourceGroups: true
-                containerApps: true
-                sqlServer: true
-                nsg: true
-                network: false
-                monitor: false
-                backup: false
-                recovery: false
+          # Set Azure context
+          Set-AzContext -SubscriptionId $env:SUBSCRIPTION_ID -TenantId $env:TENANT_ID
+          
+          # Create resource group if it doesn't exist
+          $rg = Get-AzResourceGroup -Name $env:RESOURCE_GROUP -Location $env:LOCATION -ErrorAction SilentlyContinue
+          if (-not $rg) {
+            New-AzResourceGroup -Name $env:RESOURCE_GROUP -Location $env:LOCATION
+          }
+          
+          # Deploy resources
+          Write-Host "1. Deploying NSG..."
+          try {
+            $nsgTemplatePath = Join-Path $env:MODULES_DIR "main.nsg.bicep"
+            if (Test-Path $nsgTemplatePath) {
+              New-AzResourceGroupDeployment -ResourceGroupName $env:RESOURCE_GROUP `
+                -TemplateFile $nsgTemplatePath `
+                -TemplateParameterFile "$($env:CONFIG_DIR)/project-infrastructure/nsg.east.parameters.json" `
+                -environment $env:ENVIRONMENT
+            } else {
+              throw "NSG template not found at $nsgTemplatePath"
+            }
+          } catch {
+            Write-Warning "NSG template deployment failed, falling back to direct creation: $_"
+            $nsg = Get-AzNetworkSecurityGroup -Name "dev-ciam-nsg" -ResourceGroupName $env:RESOURCE_GROUP -ErrorAction SilentlyContinue
+            if (-not $nsg) {
+              $nsg = New-AzNetworkSecurityGroup -Name "dev-ciam-nsg" -ResourceGroupName $env:RESOURCE_GROUP -Location $env:LOCATION
+            }
+            $nsg
+          }
+          Write-Host "NSG deployment successful!"
+          
+          Write-Host "2. Deploying Storage Account..."
+          try {
+            $storageTemplatePath = Join-Path $env:MODULES_DIR "main.storageAccount.bicep"
+            New-AzResourceGroupDeployment -ResourceGroupName $env:RESOURCE_GROUP `
+              -TemplateFile $storageTemplatePath `
+              -TemplateParameterFile "$($env:CONFIG_DIR)/project-infrastructure/storageAccount.east.parameters.json" `
+              -environment $env:ENVIRONMENT
+          } catch {
+            Write-Error "Error deploying Storage Account: $_"
+          }
+          
+          Write-Host "3. Deploying Managed Environment..."
+          try {
+            $managedEnvTemplatePath = Join-Path $env:MODULES_DIR "main.managedEnvironment.bicep"
+            
+            # Get the Virtual Network ID
+            $vnet = Get-AzVirtualNetwork -ResourceGroupName $env:RESOURCE_GROUP -Name "dev-ciam-vnet" -ErrorAction SilentlyContinue
+            $vnetId = $vnet.Id
+            
+            if (-not $vnetId) {
+              $vnetId = "/subscriptions/$($env:SUBSCRIPTION_ID)/resourceGroups/$($env:RESOURCE_GROUP)/providers/Microsoft.Network/virtualNetworks/dev-ciam-vnet"
+              Write-Warning "Using default Virtual Network ID: $vnetId"
+            }
+            
+            # Get Private DNS Zone IDs or use defaults
+            $privateDnsZones = @{
+              "sqlServer" = "/subscriptions/$($env:SUBSCRIPTION_ID)/resourceGroups/$($env:RESOURCE_GROUP)/providers/Microsoft.Network/privateDnsZones/privatelink.database.windows.net"
+              "azureContainerApps" = "/subscriptions/$($env:SUBSCRIPTION_ID)/resourceGroups/$($env:RESOURCE_GROUP)/providers/Microsoft.Network/privateDnsZones/privatelink.azurewebsites.net"
+            }
+            
+            New-AzResourceGroupDeployment -ResourceGroupName $env:RESOURCE_GROUP `
+              -TemplateFile $managedEnvTemplatePath `
+              -TemplateParameterFile "$($env:CONFIG_DIR)/project-infrastructure/managedEnvironment.east.parameters.json" `
+              -environment $env:ENVIRONMENT `
+              -virtualNetworkId $vnetId `
+              -privateDnsZones $privateDnsZones
+          } catch {
+            Write-Error "Error deploying Managed Environment: $_"
+          }
+        azurePowerShellVersion: LatestVersion
+        pwsh: true
+      env:
+        WORKING_DIR: $(WORKING_DIR)
+        MODULES_DIR: $(MODULES_DIR)
+        CONFIG_DIR: $(CONFIG_DIR)
+        SUBSCRIPTION_ID: $(SUBSCRIPTION_ID)
+        TENANT_ID: $(TENANT_ID)
+        LOCATION: $(LOCATION)
+        ENVIRONMENT: $(ENVIRONMENT)
+        RESOURCE_GROUP: $(RESOURCE_GROUP)

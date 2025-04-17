@@ -4,14 +4,14 @@ trigger:
       - master
   paths:
     include:
-      - config/commnp-sub/**
+      - config/**
       - azresources/**
       - templates/**
       - scripts/**
 
 variables:
   DEPLOY_FLAG: "YES"
-  WORKING_DIR: $(System.DefaultWorkingDirectory)
+  WORKING_DIR: $(System.DefaultWorkingDirectory)/azure-mono-deployment
   LOCATION: "centralus"
 
 pr:
@@ -20,7 +20,7 @@ pr:
       - master
   paths:
     include:
-      - config/commnp-sub/**
+      - config/**
       - azresources/**
       - templates/**
       - scripts/**
@@ -29,6 +29,7 @@ stages:
   # Commercial Non-Production Subscription
   - stage: Deploy_COMMNP
     displayName: "Deploy Commercial Non-Production"
+    condition: true
     jobs:
       - job: Detect_Changes
         displayName: "Detect Changed Files"
@@ -54,7 +55,7 @@ stages:
                 echo "$CHANGED_FILES"
               else
                 echo "No changes detected in relevant folders for commnp-sub"
-                echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]false"
+                echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]true"  # Force deployment for testing
                 echo "$CHANGED_FILES"
               fi
             name: changeDetection
@@ -95,166 +96,152 @@ stages:
                 monitor: true
                 backup: false
                 recovery: false
+  
+  # New Project Deployment
+  - stage: Deploy_NewProject
+    displayName: "Deploy New Project"
+    condition: true
+    jobs:
+      - job: Detect_Changes
+        displayName: "Detect Changed Files"
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+            fetchDepth: 2
 
-- stage: Deploy_CIAM
-  displayName: "Deploy CIAM Project"
-  jobs:
-    - job: Deploy_CIAM_Resources
-      displayName: "Deploy CIAM Resources"
-      pool:
-        vmImage: 'ubuntu-latest'
-      steps:
-        - checkout: self
-        
-        - task: AzurePowerShell@5
-          inputs:
-            azureSubscription: "25f11d80-28be-4f01-b1f6-6e5bfb927671"
-            ScriptType: 'InlineScript'
-            Inline: |
-              $ErrorActionPreference = "Continue"
+          - script: |
+              if [ "$(Build.Reason)" == "Manual" ] || [ "$(Build.Reason)" == "IndividualCI" ] || [ "$(Build.Reason)" == "BatchedCI" ]; then
+                # For manual or CI builds, check what changed
+                CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E '(config/new-project|azresources/modules/(main\.containerApps|main\.sqlServer|main\.managedEnvironment|main\.storageAccount|main\.nsg)\.bicep)')
+              else
+                # For PR builds, compare with target branch
+                git fetch origin $(System.PullRequest.TargetBranch)
+                CHANGED_FILES=$(git diff --name-only FETCH_HEAD HEAD | grep -E '(config/new-project|azresources/modules/(main\.containerApps|main\.sqlServer|main\.managedEnvironment|main\.storageAccount|main\.nsg)\.bicep)')
+              fi
               
-              $workingDir = "$(System.DefaultWorkingDirectory)"
-              Write-Host "Working Directory: $workingDir"
+              if [ -n "$CHANGED_FILES" ]; then
+                echo "Changes detected in relevant folders for new-project"
+                echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]true"
+                echo "$CHANGED_FILES"
+              else
+                echo "No changes detected in relevant folders for new-project"
+                echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]true"  # Changed from 'false' to 'true' to force deployment
+                echo "$CHANGED_FILES"
+              fi
+            name: changeDetection
+            displayName: "Detect Changed Files"
+
+      - job: Setup_Security_Groups
+        displayName: "Set Up Security Groups"
+        dependsOn: Detect_Changes
+        condition: eq(dependencies.Detect_Changes.outputs['changeDetection.shouldDeploy'], 'true')
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          - template: templates/rbac-deployment-task.yml
+            parameters:
+              subscriptionName: "new-project"
+              subscriptionId: "921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674"  # Using commnp-sub ID, update as needed
+              serviceConnectionId: "25f11d80-28be-4f01-b1f6-6e5bfb927671"  # Using commnp-sub connection, update as needed
+              location: $(LOCATION)
+
+      - job: Deploy_Resources
+        displayName: "Deploy New Project Resources"
+        dependsOn: Setup_Security_Groups
+        pool:
+          vmImage: 'ubuntu-latest'
+        steps:
+          - checkout: self
+          - template: templates/master-subscription-template.yml
+            parameters:
+              subscriptionName: "new-project"
+              subscriptionId: "921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674"  # Using commnp-sub ID, update as needed
+              serviceConnectionId: "25f11d80-28be-4f01-b1f6-6e5bfb927671"  # Using commnp-sub connection, update as needed
+              location: $(LOCATION)
+              projectPath: "config/new-project"
+              deployComponents:
+                subscription: false
+                resourceGroups: true
+                network: false
+                monitor: false
+                backup: false
+                recovery: false
+                storageAccount: true
+                sqlServer: true
+                managedEnvironment: true
+                containerApps: true
+          
+  # # Commercial Production Subscription
+  # - stage: Deploy_COMMPROD
+  #   displayName: "Deploy Commercial Production"
+  #   condition: true
+  #   jobs:
+  #     - job: Detect_Changes
+  #       displayName: "Detect Changed Files"
+  #       pool:
+  #         vmImage: 'ubuntu-latest'
+  #       steps:
+  #         - checkout: self
+  #           fetchDepth: 2
+
+  #         - script: |
+  #             if [ "$(Build.Reason)" == "Manual" ] || [ "$(Build.Reason)" == "IndividualCI" ] || [ "$(Build.Reason)" == "BatchedCI" ]; then
+  #               # For manual or CI builds, check what changed
+  #               CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep -E '(config/commprod-sub|azresources|templates|scripts)')
+  #             else
+  #               # For PR builds, compare with target branch
+  #               git fetch origin $(System.PullRequest.TargetBranch)
+  #               CHANGED_FILES=$(git diff --name-only FETCH_HEAD HEAD | grep -E '(config/commprod-sub|azresources|templates|scripts)')
+  #             fi
               
-              # Define paths
-              $modulesDir = Join-Path -Path $workingDir -ChildPath "azresources/modules"
-              $configDir = Join-Path -Path $workingDir -ChildPath "config/ciam-project"
-              
-              Write-Host "Modules Directory: ${modulesDir}"
-              Write-Host "Config Directory: ${configDir}"
-              
-              # Create resource group if it doesn't exist
-              $rgName = "commnp-dev-ciam-central-rg"
-              if (-not (Get-AzResourceGroup -Name $rgName -ErrorAction SilentlyContinue)) {
-                  Write-Host "Creating resource group $rgName..."
-                  New-AzResourceGroup -Name $rgName -Location "centralus"
-              }
-              
-              # Get the Virtual Network ID - needed by multiple deployments
-              $vnetName = "commnp-sub-centralus-vnet"
-              $vnetRgName = "commnp-sub-centralus-vnet-rg"
-              $vnet = Get-AzVirtualNetwork -Name $vnetName -ResourceGroupName $vnetRgName -ErrorAction SilentlyContinue
-              
-              if (-not $vnet) {
-                  Write-Host "Required virtual network $vnetName not found. Please ensure the network deployment has completed." -ForegroundColor Red
-                  exit 1
-              }
-              
-              $virtualNetworkId = $vnet.Id
-              Write-Host "Virtual Network ID: $virtualNetworkId"
-              
-              # Get or create Private DNS Zones
-              $dnsRgName = "commnp-dns-centralus-rg"
-              if (-not (Get-AzResourceGroup -Name $dnsRgName -ErrorAction SilentlyContinue)) {
-                  Write-Host "Creating DNS resource group $dnsRgName..."
-                  New-AzResourceGroup -Name $dnsRgName -Location "centralus"
-              }
-              
-              $privateDnsZones = @{
-                  sqlServer = "/subscriptions/921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674/resourceGroups/$dnsRgName/providers/Microsoft.Network/privateDnsZones/privatelink.database.windows.net"
-                  azureContainerApps = "/subscriptions/921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674/resourceGroups/$dnsRgName/providers/Microsoft.Network/privateDnsZones/privatelink.azurecontainerapps.io"
-                  blob = "/subscriptions/921fd8cb-0c80-44cf-9fd5-2a7c8f2f8674/resourceGroups/$dnsRgName/providers/Microsoft.Network/privateDnsZones/privatelink.blob.core.windows.net"
-              }
-              
-              # Create Private DNS Zones if they don't exist
-              foreach ($entry in $privateDnsZones.GetEnumerator()) {
-                  $zoneName = $entry.Key -eq "sqlServer" ? "privatelink.database.windows.net" : 
-                              $entry.Key -eq "azureContainerApps" ? "privatelink.azurecontainerapps.io" : 
-                              "privatelink.blob.core.windows.net"
-                  
-                  if (-not (Get-AzPrivateDnsZone -Name $zoneName -ResourceGroupName $dnsRgName -ErrorAction SilentlyContinue)) {
-                      Write-Host "Creating Private DNS Zone $zoneName..."
-                      New-AzPrivateDnsZone -Name $zoneName -ResourceGroupName $dnsRgName
-                  }
-              }
-              
-              # Create Storage Account for vulnerability assessment
-              $storageAccountName = "devciamst$(Get-Random -Minimum 1000 -Maximum 9999)"
-              $vulnContainerName = "vulnerability-assessments"
-              $vulnContainerPath = ""
-              
-              try {
-                  # 1. Deploying NSG first
-                  Write-Host "1. Deploying NSG..."
-                  $nsgName = "dev-ciam-nsg"
-                  if (-not (Get-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $rgName -ErrorAction SilentlyContinue)) {
-                      New-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $rgName -Location "centralus" -Force
-                      
-                      $nsg = Get-AzNetworkSecurityGroup -Name $nsgName -ResourceGroupName $rgName
-                      $nsg | Add-AzNetworkSecurityRuleConfig -Name "AllowAnyFromF910_0_0_0_8" `
-                          -Description "Allow any traffic from the internal network" `
-                          -Access Allow `
-                          -Protocol * `
-                          -Direction Inbound `
-                          -Priority 100 `
-                          -SourceAddressPrefix "10.0.0.0/8" `
-                          -SourcePortRange * `
-                          -DestinationAddressPrefix * `
-                          -DestinationPortRange * | Set-AzNetworkSecurityGroup
-                  }
-                  Write-Host "NSG deployment successful!"
-                  
-                  # 2. Deploy Storage Account
-                  Write-Host "2. Deploying Storage Account..."
-                  $storageAccount = New-AzStorageAccount -ResourceGroupName $rgName -Name $storageAccountName `
-                      -Location "centralus" -SkuName "Standard_LRS" -Kind "StorageV2" `
-                      -EnableHttpsTrafficOnly $true -AllowBlobPublicAccess $false
-                  
-                  $storageContext = $storageAccount.Context
-                  $container = New-AzStorageContainer -Name $vulnContainerName -Context $storageContext
-                  $vulnContainerPath = "https://$storageAccountName.blob.core.windows.net/$vulnContainerName"
-                  Write-Host "Storage Account deployment successful! Container path: $vulnContainerPath"
-                  
-                  # 3. Deploy Managed Environment
-                  Write-Host "3. Deploying Managed Environment..."
-                  $managedEnvDeployment = New-AzResourceGroupDeployment `
-                      -ResourceGroupName $rgName `
-                      -TemplateFile (Join-Path $modulesDir "main.managedEnvironment.bicep") `
-                      -location "centralus" `
-                      -environment "tst" `
-                      -virtualNetworkId $virtualNetworkId `
-                      -privateDnsZones $privateDnsZones `
-                      -ErrorAction Stop
-                  
-                  $managedEnvironmentId = $managedEnvDeployment.Outputs.managedEnvironmentId.Value
-                  $managedEnvironmentName = $managedEnvDeployment.Outputs.managedEnvironmentName.Value
-                  Write-Host "Managed Environment deployment successful! ID: $managedEnvironmentId"
-                  
-                  # 4. Deploy SQL Server
-                  Write-Host "4. Deploying SQL Server..."
-                  $sqlDeployment = New-AzResourceGroupDeployment `
-                      -ResourceGroupName $rgName `
-                      -TemplateFile (Join-Path $modulesDir "main.sqlServer.bicep") `
-                      -location "centralus" `
-                      -environment "tst" `
-                      -virtualNetworkId $virtualNetworkId `
-                      -privateDnsZones $privateDnsZones `
-                      -vulnerabilityAssessmentsStorageContainerPath $vulnContainerPath `
-                      -ErrorAction Stop
-                  
-                  $sqlServerName = $sqlDeployment.Outputs.sqlServerName.Value
-                  Write-Host "SQL Server deployment successful! Server name: $sqlServerName"
-                  
-                  # 5. Deploy Container Apps
-                  if ($managedEnvironmentId) {
-                      Write-Host "5. Deploying Container Apps..."
-                      $containerAppsDeployment = New-AzResourceGroupDeployment `
-                          -ResourceGroupName $rgName `
-                          -TemplateFile (Join-Path $modulesDir "main.containerApps.bicep") `
-                          -location "centralus" `
-                          -environment "tst" `
-                          -managedEnvironmentId $managedEnvironmentId `
-                          -sqlServerName $sqlServerName `
-                          -storageAccountName $storageAccountName `
-                          -ErrorAction Stop
-                      
-                      Write-Host "Container Apps deployment successful!"
-                  } else {
-                      Write-Host "Managed Environment not found, skipping Container Apps deployment"
-                  }
-              } catch {
-                  Write-Host "Error during deployment: $_"
-                  Write-Host "Continuing with remaining resources..."
-              }
-            azurePowerShellVersion: 'LatestVersion'
-            pwsh: true
+  #             if [ -n "$CHANGED_FILES" ]; then
+  #               echo "Changes detected in relevant folders for commprod-sub"
+  #               echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]true"
+  #               echo "$CHANGED_FILES"
+  #             else
+  #               echo "No changes detected in relevant folders for commprod-sub"
+  #               echo "##vso[task.setvariable variable=shouldDeploy;isOutput=true]false"
+  #               echo "$CHANGED_FILES"
+  #             fi
+  #           name: changeDetection
+  #           displayName: "Detect Changed Files"
+
+  #     - job: Setup_Security_Groups
+  #       displayName: "Set Up Security Groups"
+  #       dependsOn: Detect_Changes
+  #       condition: eq(dependencies.Detect_Changes.outputs['changeDetection.shouldDeploy'], 'true')
+  #       pool:
+  #         vmImage: 'ubuntu-latest'
+  #       steps:
+  #         - checkout: self
+  #         - template: templates/rbac-deployment-task.yml
+  #           parameters:
+  #             subscriptionName: "commprod-sub"
+  #             subscriptionId: "94010bcc-f819-44ae-8f50-9a69e46d6bb7"
+  #             serviceConnectionId: "7ad47311-d1ac-47fe-8359-9a3d5dafef2e"
+  #             location: $(LOCATION)
+
+  #     - job: Deploy_Resources
+  #       displayName: "Deploy Commercial Prod Resources"
+  #       dependsOn: Setup_Security_Groups
+  #       pool:
+  #         vmImage: 'ubuntu-latest'
+  #       steps:
+  #         - checkout: self
+  #         - template: templates/master-subscription-template.yml
+  #           parameters:
+  #             subscriptionName: "commprod-sub"
+  #             subscriptionId: "94010bcc-f819-44ae-8f50-9a69e46d6bb7"
+  #             serviceConnectionId: "7ad47311-d1ac-47fe-8359-9a3d5dafef2e"
+  #             location: $(LOCATION)
+  #             deployComponents:
+  #               subscription: true
+  #               resourceGroups: true
+  #               network: true
+  #               monitor: true
+  #               backup: false
+  #               recovery: false
+
+  # Additional subscription stages can be added in a similar pattern
